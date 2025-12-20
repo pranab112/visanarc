@@ -1,4 +1,4 @@
-import { ActivityLog, User } from '../types';
+import { ActivityLog, User, ChangeRecord } from '../types';
 import { getCurrentUser } from './authService';
 
 const LOGS_KEY_PREFIX = 'sag_logs_';
@@ -9,7 +9,8 @@ const getLogKey = (agencyId: string) => `${LOGS_KEY_PREFIX}${agencyId}`;
 export const logActivity = (
     action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'EXPORT',
     entityType: 'Student' | 'Invoice' | 'Settings' | 'File' | 'Auth' | 'Commission' | 'Expense',
-    details: string
+    details: string,
+    changes?: Record<string, ChangeRecord>
 ) => {
     const user = getCurrentUser();
     if (!user) return; // Should allow logging for failed logins in future, but for now requires user
@@ -21,7 +22,8 @@ export const logActivity = (
         action,
         entityType,
         details,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        changes
     };
 
     const key = getLogKey(user.agencyId);

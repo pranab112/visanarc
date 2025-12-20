@@ -1,5 +1,5 @@
 
-import { Country, DocumentItem } from './types';
+import { Country, DocumentItem, Expense } from './types';
 
 export interface DocRequirement {
   name: string;
@@ -8,71 +8,55 @@ export interface DocRequirement {
 }
 
 export const UNIVERSAL_DOCS: DocRequirement[] = [
-  { name: 'Passport (Valid 6mo+)', category: 'Identity' },
-  { name: 'Citizenship (Notarized)', category: 'Identity' },
-  { name: 'Passport Size Photos', category: 'Identity' },
-  { name: 'SLC/SEE Marksheet', category: 'Academics' },
-  { name: '+2/HSEB Transcript & Character', category: 'Academics' },
-  { name: "Bachelor's Transcript & Degree", category: 'Academics', condition: 'If Masters' },
-  { name: 'IELTS/PTE Scorecard', category: 'Tests', condition: 'with Login Credentials' },
-  { name: 'NOC (Ministry of Education)', category: 'Gov' },
-  { name: 'CV/Resume', category: 'Gap/Work', condition: 'Gap > 6mo' },
-  { name: 'Work Experience Letters', category: 'Gap/Work', condition: 'Gap > 6mo' },
-  { name: 'Gap Affidavit', category: 'Gap/Work', condition: 'Gap > 6mo' },
-  { name: 'Student Email Credentials', category: 'Operations', condition: 'Gmail/Outlook' },
-  { name: 'Marriage Certificate', category: 'Spouse', condition: 'If Married' },
-  { name: 'Spouse Passport', category: 'Spouse', condition: 'If Married' }
+  { name: 'Valid International Passport (6mo+)', category: 'Identity' },
+  { name: 'Academic Transcripts', category: 'Academics' },
+  { name: 'Degree Certificates / Diplomas', category: 'Academics' },
+  { name: 'Standardized English Score (IELTS/PTE/TOEFL)', category: 'Tests' },
+  { name: 'Statement of Purpose (SOP)', category: 'Academics' },
+  { name: 'Letters of Recommendation (LOR)', category: 'Academics' },
+  { name: 'Curriculum Vitae (CV) / Resume', category: 'Academics' },
+  { name: 'Proof of Funds (Bank Statements)', category: 'Finance' },
+  { name: 'Passport Sized Photographs', category: 'Identity' }
 ];
 
 export const COUNTRY_SPECIFIC_DOCS: Record<Country, DocRequirement[]> = {
   [Country.USA]: [
-    { name: 'I-20 Form', category: 'Visa' },
-    { name: 'DS-160 Confirmation', category: 'Visa' },
-    { name: 'SEVIS Fee Receipt', category: 'Visa' },
-    { name: 'Bank Balance Certificate', category: 'Finance', condition: '1 Year Tuition' },
-    { name: 'Affidavit of Support', category: 'Finance' },
-    { name: 'WES/ECE Evaluation', category: 'Academics', condition: 'If required' },
-    { name: 'SOP (Statement of Purpose)', category: 'Academics' }
+    { name: 'Form I-20', category: 'Visa' },
+    { name: 'SEVIS I-901 Fee Receipt', category: 'Visa' },
+    { name: 'DS-160 Confirmation Page', category: 'Visa' },
+    { name: 'SAT / ACT Scores', category: 'Tests', condition: 'Undergrad' },
+    { name: 'GRE / GMAT Scores', category: 'Tests', condition: 'Graduate' }
   ],
   [Country.Australia]: [
-    { name: 'CoE (Confirmation of Enrolment)', category: 'Visa' },
-    { name: 'GS (Genuine Student) Statement', category: 'Visa' },
-    { name: 'OSHC (Health Insurance)', category: 'Health' },
-    { name: 'Medical Exam (HAP ID)', category: 'Health' },
-    { name: 'Relationship Certificate', category: 'Civil', condition: 'Ward Office' },
-    { name: 'Property Valuation Report', category: 'Finance' },
-    { name: 'One and the Same Certificate', category: 'Civil', condition: 'If name mismatch' }
+    { name: 'Genuine Student (GS) Statement', category: 'Visa', condition: 'Replaced GTE Mar 2024' },
+    { name: 'Confirmation of Enrolment (CoE)', category: 'Visa' },
+    { name: 'Overseas Student Health Cover (OSHC)', category: 'Health' },
+    { name: 'Welfare Arrangements', category: 'Legal', condition: 'Under 18' }
   ],
   [Country.Canada]: [
-    { name: 'LOA (Letter of Acceptance)', category: 'Visa' },
-    { name: 'PAL (Provincial Attestation Letter)', category: 'Visa' },
-    { name: 'GIC Certificate ($20,635 CAD)', category: 'Finance' },
-    { name: 'Upfront Medical Sheet', category: 'Health' },
-    { name: 'Custodianship Declaration', category: 'Visa', condition: 'Under 18' }
+    { name: 'Provincial Attestation Letter (PAL)', category: 'Visa', condition: 'New 2024/25 Req' },
+    { name: 'Guaranteed Investment Certificate (GIC)', category: 'Finance', condition: '$20,635 CAD' },
+    { name: 'Certificat d’acceptation du Québec (CAQ)', category: 'Visa', condition: 'Quebec Only' },
+    { name: 'Letter of Explanation (LOE)', category: 'Visa' }
   ],
   [Country.UK]: [
-    { name: 'CAS Statement', category: 'Visa' },
-    { name: 'TB Test Certificate', category: 'Health', condition: 'IOM' },
-    { name: 'Credibility Interview Pass Proof', category: 'Visa' },
-    { name: 'ATAS Certificate', category: 'Academics', condition: 'Science/Eng courses' }
+    { name: 'Confirmation of Acceptance for Studies (CAS)', category: 'Visa' },
+    { name: 'Tuberculosis (TB) Test Certificate', category: 'Health' },
+    { name: 'ATAS Certificate', category: 'Academics', condition: 'Sensitive Subjects' },
+    { name: 'Immigration Health Surcharge (IHS)', category: 'Health' }
   ],
   [Country.Japan]: [
-    { name: 'COE (Certificate of Eligibility)', category: 'Visa' },
-    { name: 'JLPT/NAT Certificate', category: 'Academics' },
-    { name: 'Relationship Certificate', category: 'Civil' },
-    { name: 'Income & Tax Clearance', category: 'Finance' },
-    { name: 'Japanese Translations', category: 'Ops' }
+    { name: 'Certificate of Eligibility (CoE)', category: 'Visa' },
+    { name: 'EJU Results', category: 'Tests', condition: 'Japanese Track' },
+    { name: 'JLPT Certificate', category: 'Tests' },
+    { name: 'Certified Japanese Translations', category: 'Legal' }
   ],
   [Country.Korea]: [
-    { name: 'Certificate of Admission', category: 'Visa', condition: 'Issued by University' },
-    { name: 'Visa Application Form', category: 'Visa', condition: 'Form No. 34' },
-    { name: 'Academic Transcripts', category: 'Academics', condition: 'Apostilled/Consular Attested' },
-    { name: 'Language Score (TOPIK/IELTS)', category: 'Academics', condition: 'Korean vs English Track' },
-    { name: 'Bank Balance Certificate', category: 'Finance', condition: 'Frozen 3-6 Months' },
-    { name: "Sponsor's Income & Tax", category: 'Finance' },
-    { name: 'TB Test Report', category: 'Health', condition: 'Designated Hospitals Only' },
-    { name: 'Family Relation Certificate', category: 'Identity', condition: 'Translated & Notarized' },
-    { name: 'Study Plan', category: 'Visa', condition: 'Specific Korea Format' }
+    { name: 'Apostilled / Legalized Degrees', category: 'Legal' },
+    { name: 'Certificate of Admission (CoA)', category: 'Visa' },
+    { name: 'Family Relation Certificate', category: 'Identity', condition: 'For Sponsors' },
+    { name: 'TOPIK Scores', category: 'Tests', condition: 'Korean Track' },
+    { name: 'TB Test Report', category: 'Health' }
   ]
 };
 
@@ -85,7 +69,7 @@ export const MOCK_STUDENTS_INITIAL = [
     targetCountry: Country.Australia,
     status: 'Applied',
     nocStatus: 'Voucher Received',
-    documents: { 'Passport (Valid 6mo+)': true, 'SLC/SEE Marksheet': true },
+    documents: { 'Valid International Passport (6mo+)': 'Uploaded', 'Academic Transcripts': 'Uploaded' },
     documentFiles: {},
     documentDependencies: {},
     notes: 'Waiting for offer letter from Flinders.',
@@ -121,173 +105,14 @@ export const MOCK_STUDENTS_INITIAL = [
         bookingStatus: 'Pending',
         mockScores: { listening: '60', reading: '58', writing: '62', speaking: '65', overall: '61' }
     }
-  },
-  {
-    id: '3',
-    name: 'Aarav Singh',
-    email: 'aarav.s@example.com',
-    phone: '9851000003',
-    targetCountry: Country.Canada,
-    status: 'Offer Received',
-    nocStatus: 'Applied',
-    documents: { 'Passport (Valid 6mo+)': true, 'IELTS/PTE Scorecard': true, 'LOA (Letter of Acceptance)': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Received LOA from Seneca. Preparing GIC funds.',
-    createdAt: Date.now() - 86400000 * 10,
-    blockedBy: [],
-    testType: 'IELTS',
-    testScore: '7.0',
-    gpa: '3.8',
-    financialCap: 'Satisfactory',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '4',
-    name: 'Riya Basnet',
-    email: 'riya.b@example.com',
-    phone: '9812000004',
-    targetCountry: Country.UK,
-    status: 'Visa Granted',
-    nocStatus: 'Issued',
-    documents: { 'Passport (Valid 6mo+)': true, 'CAS Statement': true, 'TB Test Certificate': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Visa granted! Need to arrange pre-departure briefing.',
-    createdAt: Date.now() - 86400000 * 20,
-    blockedBy: [],
-    testType: 'IELTS',
-    testScore: '6.5',
-    gpa: '3.0',
-    financialCap: 'Medium',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '5',
-    name: 'Binod Chaudhry',
-    email: 'binod.c@example.com',
-    phone: '9860000005',
-    targetCountry: Country.Japan,
-    status: 'Applied',
-    nocStatus: 'Not Applied',
-    documents: { 'Passport (Valid 6mo+)': true, 'JLPT/NAT Certificate': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Applied for language school in Tokyo. Waiting for COE.',
-    createdAt: Date.now() - 86400000 * 3,
-    blockedBy: [],
-    testType: 'None',
-    testScore: 'N5',
-    gpa: '2.8',
-    financialCap: 'Low',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '6',
-    name: 'Mina Tamang',
-    email: 'mina.t@example.com',
-    phone: '9845000006',
-    targetCountry: Country.Korea,
-    status: 'Lead',
-    nocStatus: 'Not Applied',
-    documents: {},
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Looking for Universities in Seoul. Needs guidance on bank balance.',
-    createdAt: Date.now(),
-    blockedBy: [],
-    testType: 'None',
-    testScore: '',
-    gpa: '3.5',
-    financialCap: 'Medium',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '7',
-    name: 'Suren Magar',
-    email: 'suren.m@example.com',
-    phone: '9801000007',
-    targetCountry: Country.Australia,
-    status: 'Visa Rejected',
-    nocStatus: 'Verified',
-    documents: { 'Passport (Valid 6mo+)': true, 'CoE (Confirmation of Enrolment)': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Visa rejected due to GTE. Considering re-application or change of country.',
-    createdAt: Date.now() - 86400000 * 45,
-    blockedBy: [],
-    testType: 'PTE',
-    testScore: '58',
-    gpa: '2.6',
-    financialCap: 'Low',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '8',
-    name: 'Priti Oli',
-    email: 'priti.o@example.com',
-    phone: '9823000008',
-    targetCountry: Country.USA,
-    status: 'Lead',
-    nocStatus: 'Not Applied',
-    documents: {},
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Currently taking IELTS classes. Plan to apply for Fall 2025.',
-    createdAt: Date.now() - 86400000 * 2,
-    blockedBy: [],
-    testType: 'IELTS',
-    testScore: 'Pending',
-    gpa: '3.9',
-    financialCap: 'Satisfactory',
-    testPrep: {
-        enrolled: true,
-        batch: 'Evening (5-6 PM)',
-        bookingStatus: 'Booked',
-        examDate: Date.now() + 86400000 * 10,
-        mockScores: { listening: '7.0', reading: '6.5', writing: '6.0', speaking: '7.0', overall: '6.5' }
-    }
-  },
-  {
-    id: '9',
-    name: 'Kiren Limbu',
-    email: 'kiren.l@example.com',
-    phone: '9849000009',
-    targetCountry: Country.Canada,
-    status: 'Offer Received',
-    nocStatus: 'Voucher Received',
-    documents: { 'Passport (Valid 6mo+)': true, 'LOA (Letter of Acceptance)': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Conditional offer received. Need to send final transcript.',
-    createdAt: Date.now() - 86400000 * 12,
-    blockedBy: [],
-    testType: 'IELTS',
-    testScore: '6.5',
-    gpa: '3.1',
-    financialCap: 'Medium',
-    testPrep: { enrolled: false }
-  },
-  {
-    id: '10',
-    name: 'Ashish Darai',
-    email: 'ashish.d@example.com',
-    phone: '9861000010',
-    targetCountry: Country.UK,
-    status: 'Applied',
-    nocStatus: 'Applied',
-    documents: { 'Passport (Valid 6mo+)': true },
-    documentFiles: {},
-    documentDependencies: {},
-    notes: 'Applied to 3 universities. Waiting for response.',
-    createdAt: Date.now() - 86400000 * 6,
-    blockedBy: [],
-    testType: 'PTE',
-    testScore: '62',
-    gpa: '2.9',
-    financialCap: 'Medium',
-    testPrep: { enrolled: false }
   }
+];
+
+export const MOCK_EXPENSES_INITIAL: Expense[] = [
+    { id: 'ex1', category: 'Rent', amount: 45000, description: 'Office Monthly Rent', date: Date.now() - 86400000 * 2, recordedBy: 'Admin', branchId: 'main' },
+    { id: 'ex2', category: 'Salaries', amount: 120000, description: 'Staff Payroll - Jan', date: Date.now() - 86400000 * 5, recordedBy: 'Admin', branchId: 'main' },
+    { id: 'ex3', category: 'Marketing', amount: 15000, description: 'Facebook Ads - Australia Campaign', date: Date.now() - 86400000 * 1, recordedBy: 'Admin', branchId: 'main' },
+    { id: 'ex4', category: 'Utilities', amount: 8000, description: 'Internet & Electricity', date: Date.now() - 86400000 * 3, recordedBy: 'Admin', branchId: 'main' }
 ];
 
 export const MOCK_PARTNERS_INITIAL = [
@@ -299,8 +124,28 @@ export const MOCK_PARTNERS_INITIAL = [
 ];
 
 export const TEST_PREP_LINKS = [
-  { name: 'British Council (IELTS)', url: 'https://takeielts.britishcouncil.org/' },
-  { name: 'IDP Nepal (IELTS)', url: 'https://www.idp.com/nepal/ielts/' },
-  { name: 'Pearson (PTE)', url: 'https://www.pearsonpte.com/' },
-  { name: 'ETS (TOEFL)', url: 'https://www.ets.org/toefl.html' }
+  { 
+    name: 'British Council (IELTS)', 
+    url: 'https://takeielts.britishcouncil.org/',
+    bookingUrl: 'https://ieltsregistration.britishcouncil.org/',
+    resultsUrl: 'https://ieltsregistration.britishcouncil.org/results'
+  },
+  { 
+    name: 'IDP Nepal (IELTS)', 
+    url: 'https://www.idp.com/nepal/ielts/',
+    bookingUrl: 'https://ielts.idp.com/book',
+    resultsUrl: 'https://ielts.idp.com/results'
+  },
+  { 
+    name: 'Pearson (PTE)', 
+    url: 'https://www.pearsonpte.com/',
+    bookingUrl: 'https://www.pearsonpte.com/book-now',
+    resultsUrl: 'https://www.pearsonpte.com/scoring/access-your-scores'
+  },
+  { 
+    name: 'ETS (TOEFL)', 
+    url: 'https://www.ets.org/toefl.html',
+    bookingUrl: 'https://v2.ereg.ets.org/ereg/public/jump?_p=TEL',
+    resultsUrl: 'https://www.ets.org/toefl/test-takers/ibt/scores/get-scores.html'
+  }
 ];

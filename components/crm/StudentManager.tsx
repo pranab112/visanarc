@@ -1,91 +1,130 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap } from 'lucide-react';
-import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus } from '../../types';
-import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings } from '../../services/storageService';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType } from '../../types';
+import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners } from '../../services/storageService';
 import { getCurrentUser } from '../../services/authService';
-import { uploadFile } from '../../services/fileStorageService';
-import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS, DocRequirement } from '../../constants';
+import { uploadFile, deleteFile } from '../../services/fileStorageService';
+import { DocRequirement } from '../../constants';
 import { simulateSendEmail, generateWhatsAppLink, fillTemplate } from '../../services/communicationService';
 import { logActivity } from '../../services/auditService';
 import { extractPassportData, analyzeVisaRisk } from '../../services/geminiService';
 import { runStatusAutomation } from '../../services/workflowService';
 import { generatePartnerBundle } from '../../services/bundleService';
+import { getRequiredDocuments, generateReceipt } from '../../services/documentService';
+import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 
-const LEAD_SOURCES = ['Walk-in', 'Referral', 'Web Form', 'Social Media', 'Event', 'Partner', 'Other'];
+/**
+ * Optimized Student Card Component
+ */
+const StudentCard = React.memo(({ student, onClick }: { student: Student, onClick: (id: string) => void }) => (
+  <div 
+    onClick={() => onClick(student.id)} 
+    className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between h-[192px] group"
+  >
+      <div>
+          <div className="flex justify-between mb-3">
+            <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold group-hover:scale-110 transition-transform">
+              {student.name.charAt(0)}
+            </div>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold uppercase">
+              {student.status}
+            </span>
+          </div>
+          <h3 className="font-bold text-lg truncate text-slate-800">{student.name}</h3>
+          <p className="text-xs text-slate-400">{student.phone || 'No phone recorded'}</p>
+      </div>
+      <div className="pt-4 border-t flex justify-between items-center text-xs text-slate-500">
+          <span className="flex items-center font-bold text-indigo-600"><Globe size={12} className="mr-1"/> {student.targetCountry}</span> 
+          <span className="bg-slate-100 px-2 py-0.5 rounded uppercase font-bold text-[9px]">{student.testType || 'N/A'}</span>
+      </div>
+  </div>
+));
+
+/**
+ * Loading Skeleton Component
+ */
+const StudentSkeleton = () => (
+  <div className="bg-white p-5 rounded-2xl border border-slate-100 h-[192px] animate-pulse">
+    <div className="flex justify-between mb-3">
+      <div className="h-10 w-10 rounded-full bg-slate-100"></div>
+      <div className="h-5 w-16 bg-slate-50 rounded-full"></div>
+    </div>
+    <div className="h-5 w-3/4 bg-slate-100 rounded mb-2"></div>
+    <div className="h-3 w-1/2 bg-slate-50 rounded mb-4"></div>
+    <div className="pt-4 border-t flex justify-between">
+      <div className="h-3 w-20 bg-slate-50 rounded"></div>
+      <div className="h-3 w-10 bg-slate-50 rounded"></div>
+    </div>
+  </div>
+);
 
 export const StudentManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [settings, setSettings] = useState<AgencySettings | null>(null);
   
   const [userRole, setUserRole] = useState<UserRole>('Viewer');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'documents' | 'notes' | 'profile' | 'testprep'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'notes' | 'profile' | 'financials' | 'risk'>('documents');
   
   const [isAdding, setIsAdding] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [viewMode, setViewMode] = useState<'consultancy' | 'testprep'>('consultancy');
 
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
-  const [linkingDoc, setLinkingDoc] = useState<string | null>(null);
-
-  // Bundle Generation State
-  const [isBundling, setIsBundling] = useState(false);
-  const [bundleReady, setBundleReady] = useState<Blob | null>(null);
-  const [showBundleModal, setShowBundleModal] = useState(false);
-  const [secureLink, setSecureLink] = useState('');
-
-  // AI Risk State
+  const [isSaving, setIsSaving] = useState(false);
   const [analyzingRisk, setAnalyzingRisk] = useState(false);
 
-  // Edit Form Data
-  const [editFormData, setEditFormData] = useState<Partial<Student>>({ 
-      name: '', email: '', phone: '', targetCountry: Country.Australia,
-      testType: 'None', testScore: '', targetScore: '', gpa: '', financialCap: 'Low', source: 'Walk-in',
-      age: 0, educationGap: 0, workExperience: 0, previousRefusals: false,
-      passportNumber: '', dateOfBirth: '', address: '', nationality: '', gender: 'Male',
-      portalPassword: '',
-      riskAnalysis: undefined,
-      testPrep: {
-          enrolled: false,
-          bookingStatus: 'Pending',
-          mockScores: { listening: '', reading: '', writing: '', speaking: '', overall: '' }
-      }
+  // Financial States
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [newInvoiceAmount, setNewInvoiceAmount] = useState('');
+  const [newInvoiceDesc, setNewInvoiceDesc] = useState('Service Fee');
+
+  // Virtualization State
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(800);
+
+  // Toast State
+  const [toast, setToast] = useState<{ show: boolean, msg: string, type: 'success' | 'error' } | null>(null);
+
+  // Notes Extension State
+  const [newNoteText, setNewNoteText] = useState('');
+  const [newNoteType, setNewNoteType] = useState<NoteType>('General');
+  const [noteFilter, setNoteFilter] = useState<NoteType | 'All'>('All');
+
+  const [editFormData, setEditFormData] = useState<Partial<Student>>({});
+  const prevSelectedId = useRef<string | null>(null);
+
+  // --- DETAILED ADD STUDENT FIELDS ---
+  const [newStudentData, setNewStudentData] = useState<Partial<Student>>({
+      name: '',
+      email: '',
+      phone: '',
+      targetCountry: Country.Australia,
+      gender: 'Male',
+      dateOfBirth: '',
+      passportNumber: '',
+      nationality: 'Nepalese',
+      highestQualification: 'Undergraduate (+2)',
+      gpa: '',
+      testType: 'None',
+      testScore: '',
+      intakeMonth: 'September',
+      intakeYear: '2025',
+      annualTuition: 0,
+      educationGap: 0,
+      previousRefusals: false,
+      borderDetails: '',
+      source: 'Walk-in',
+      branchId: 'main',
+      ocrConfidence: undefined
   });
-
-  // Add Student Fields
-  const [newStudentName, setNewStudentName] = useState('');
-  const [newStudentEmail, setNewStudentEmail] = useState('');
-  const [newStudentPhone, setNewStudentPhone] = useState('');
-  const [newStudentCountry, setNewStudentCountry] = useState<Country>(Country.Australia);
-  const [newStudentSource, setNewStudentSource] = useState('Walk-in');
-  const [newStudentTestType, setNewStudentTestType] = useState('IELTS');
-  const [newStudentTestScore, setNewStudentTestScore] = useState('');
-  const [newStudentTargetScore, setNewStudentTargetScore] = useState('');
-  const [newStudentGpa, setNewStudentGpa] = useState('');
-  const [newStudentFinance, setNewStudentFinance] = useState('Low');
-  const [newStudentBatch, setNewStudentBatch] = useState('Morning (7-8 AM)');
-  const [newStudentAge, setNewStudentAge] = useState<string>('');
-  const [newStudentGap, setNewStudentGap] = useState<string>('');
-  const [newStudentWorkExp, setNewStudentWorkExp] = useState<string>('');
-  const [newStudentRefusals, setNewStudentRefusals] = useState<boolean>(false);
-  const [newStudentAddress, setNewStudentAddress] = useState('');
-  const [newStudentPassport, setNewStudentPassport] = useState('');
-  const [newStudentDOB, setNewStudentDOB] = useState('');
-  const [newStudentGender, setNewStudentGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [newStudentNationality, setNewStudentNationality] = useState('');
+  
   const [scanningPassport, setScanningPassport] = useState(false);
-
-  const [showVisaWorkflow, setShowVisaWorkflow] = useState(false);
-  const [visaCommission, setVisaCommission] = useState('');
-  const [processingVisa, setProcessingVisa] = useState(false);
-  const [sendEmailChecked, setSendEmailChecked] = useState(true);
-  const [recordRevenueChecked, setRecordRevenueChecked] = useState(true);
-  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -94,885 +133,1470 @@ export const StudentManager: React.FC = () => {
             const currentUser = getCurrentUser();
             setUserRole(currentUser?.role || 'Viewer');
 
-            const [s, i, set] = await Promise.all([
+            const [s, i, set, p] = await Promise.all([
                 fetchStudents(),
                 fetchInvoices(),
-                fetchSettings()
+                fetchSettings(),
+                fetchPartners()
             ]);
             setStudents(s);
             setInvoices(i);
             setSettings(set);
+            setPartners(p);
             if (set) {
-                setNewStudentCountry(set.defaultCountry);
-                setSendEmailChecked(set.notifications.emailOnVisa);
+                setNewStudentData(prev => ({ ...prev, targetCountry: set.defaultCountry }));
             }
         } catch (error) {
             console.error("Failed to load data", error);
         } finally {
-            setLoading(false);
+            setTimeout(() => setLoading(false), 800);
         }
     };
     init();
   }, []);
 
-  const plan = settings?.subscription?.plan || 'Free';
-  const studentLimit = plan === 'Free' ? 50 : 99999;
-  const canAddStudent = students.length < studentLimit && userRole !== 'Viewer';
-  const canDelete = userRole === 'Owner';
-  const canEdit = userRole !== 'Viewer';
+  // Update container height on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current) {
+        setContainerHeight(containerRef.current.clientHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, [loading, selectedStudentId]);
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  }, []);
+
+  const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
+  const studentInvoices = useMemo(() => invoices.filter(inv => inv.studentId === selectedStudentId), [invoices, selectedStudentId]);
 
   useEffect(() => {
     if (selectedStudent) {
-        setEditFormData({ ...selectedStudent });
-        setBundleReady(null);
-        setShowBundleModal(false);
+        if (prevSelectedId.current !== selectedStudentId) {
+            setEditFormData({ ...selectedStudent });
+            prevSelectedId.current = selectedStudentId;
+        }
+    } else {
+        prevSelectedId.current = null;
     }
-  }, [selectedStudentId, selectedStudent, viewMode]);
+  }, [selectedStudentId, selectedStudent]);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const handleAsyncUpdate = async (updatedStudents: Student[]) => {
       setSyncing(true);
-      setStudents(updatedStudents);
-      await saveStudents(updatedStudents);
-      setSyncing(false);
+      try {
+          await saveStudents(updatedStudents);
+          setStudents(updatedStudents);
+      } finally {
+          setSyncing(false);
+      }
   };
 
-  const handleAsyncInvoiceUpdate = async (updatedInvoices: Invoice[]) => {
-      setSyncing(true);
-      setInvoices(updatedInvoices);
-      await saveInvoices(updatedInvoices);
-      setSyncing(false);
-  };
-
-  const calculateAge = (dob: string): number => {
-    if (!dob) return 0;
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
+  const handlePartnerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pId = e.target.value;
+    if (!pId) {
+        setEditFormData({
+            ...editFormData,
+            assignedPartnerId: undefined,
+            assignedPartnerName: undefined,
+            commissionAmount: undefined
+        });
+        return;
     }
-    return age;
+    const partner = partners.find(p => p.id === pId);
+    if (partner) {
+        const tuition = editFormData.annualTuition || 0;
+        const comm = (tuition * partner.commissionRate) / 100;
+        setEditFormData({
+            ...editFormData,
+            assignedPartnerId: partner.id,
+            assignedPartnerName: partner.name,
+            commissionAmount: comm
+        });
+    }
   };
 
-  const handlePassportScan = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleCreateInvoice = async () => {
+      if (!selectedStudent || !newInvoiceAmount) return;
+      
+      const amt = parseFloat(newInvoiceAmount);
+      if (isNaN(amt) || amt <= 0) {
+          showToast("Please enter a valid amount.", "error");
+          return;
+      }
 
-    setScanningPassport(true);
-    try {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const base64 = (reader.result as string).split(',')[1];
-            const data = await extractPassportData(base64, file.type);
-            
-            if (data) {
-                if (isEditMode) {
-                    setEditFormData(prev => ({
-                        ...prev,
-                        name: data.name || prev.name,
-                        passportNumber: data.passportNumber || prev.passportNumber,
-                        dateOfBirth: data.dateOfBirth || prev.dateOfBirth,
-                        address: data.address || prev.address,
-                        nationality: data.nationality || prev.nationality,
-                        gender: data.gender || prev.gender,
-                        age: calculateAge(data.dateOfBirth) || prev.age
-                    }));
-                    alert("Passport scanned successfully! Profile fields updated.");
-                } else {
-                    setNewStudentName(data.name);
-                    setNewStudentPassport(data.passportNumber);
-                    setNewStudentAddress(data.address);
-                    setNewStudentDOB(data.dateOfBirth);
-                    setNewStudentNationality(data.nationality);
-                    if (data.gender) setNewStudentGender(data.gender as 'Male' | 'Female' | 'Other');
-                    if (data.dateOfBirth) {
-                        setNewStudentAge(calculateAge(data.dateOfBirth).toString());
-                    }
-                    alert("Passport scanned! Form auto-filled.");
-                }
-                logActivity('UPDATE', 'Student', `Used AI OCR to scan passport for ${data.name}`);
-            } else {
-                alert("Could not extract data from passport. Please ensure image is clear.");
-            }
-            setScanningPassport(false);
-        };
-    } catch (err) {
-        console.error(err);
-        alert("Error scanning passport.");
-        setScanningPassport(false);
-    }
-    e.target.value = '';
+      setIsSaving(true);
+      try {
+          const timestamp = Date.now();
+          const newInvoice: Invoice = {
+              id: `inv_${timestamp}`,
+              invoiceNumber: `INV-${selectedStudent.name.substring(0,3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+              studentId: selectedStudent.id,
+              studentName: selectedStudent.name,
+              amount: amt,
+              description: newInvoiceDesc,
+              status: 'Pending',
+              date: timestamp,
+              branchId: selectedStudent.branchId || 'main'
+          };
+
+          const updatedInvoices = [newInvoice, ...invoices];
+          await saveInvoices(updatedInvoices);
+          setInvoices(updatedInvoices);
+          
+          logActivity('CREATE', 'Invoice', `Generated invoice ${newInvoice.invoiceNumber} for ${selectedStudent.name}`);
+          showToast(`Invoice ${newInvoice.invoiceNumber} generated.`);
+          
+          setIsCreatingInvoice(false);
+          setNewInvoiceAmount('');
+          setNewInvoiceDesc('Service Fee');
+      } catch (err) {
+          showToast("Failed to create invoice.", "error");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleToggleInvoiceStatus = async (invoiceId: string) => {
+      const updated = invoices.map(inv => {
+          if (inv.id === invoiceId) {
+              return { ...inv, status: (inv.status === 'Paid' ? 'Pending' : 'Paid') as 'Paid' | 'Pending' };
+          }
+          return inv;
+      });
+      setInvoices(updated);
+      await saveInvoices(updated);
+      showToast("Payment status updated.");
+  };
+
+  const handleSaveProfile = async () => {
+      if (!selectedStudent || isSaving) return;
+      setIsSaving(true);
+      try {
+          const updatedStudent = { ...selectedStudent, ...editFormData } as Student;
+          const updatedList = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+          await saveStudents(updatedList);
+          setStudents(updatedList);
+          logActivity('UPDATE', 'Student', `Updated profile for ${selectedStudent.name}`);
+          showToast("Student profile updated successfully!");
+      } catch (err: any) {
+          showToast("Failed to save changes. Please check your connection.", "error");
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const handleRunRiskAnalysis = async () => {
-      if (!selectedStudent || !editFormData.targetCountry) return;
-      setAnalyzingRisk(true);
-      try {
-          const profileStr = `
-            Age: ${editFormData.age || 'Unknown'},
-            Education Gap: ${editFormData.educationGap || 0} years,
-            English Score: ${editFormData.testScore || 'Pending'},
-            Work Experience: ${editFormData.workExperience || 0} years,
-            Previous Refusals: ${editFormData.previousRefusals ? 'Yes' : 'No'},
-            Financial Cap: ${editFormData.financialCap || 'Unknown'}
-          `;
-          const result = await analyzeVisaRisk(profileStr, editFormData.targetCountry);
-          
-          const updatedAnalysis = { date: Date.now(), result };
-          setEditFormData(prev => ({ ...prev, riskAnalysis: updatedAnalysis }));
-          
-          // Save immediately
-          updateStudent({ 
-              ...selectedStudent, 
-              ...editFormData as Student, 
-              riskAnalysis: updatedAnalysis 
-          });
-          logActivity('UPDATE', 'Student', `Ran AI Risk Analysis for ${selectedStudent.name}`);
-      } catch (err) {
-          alert("Failed to analyze risk. Please try again.");
-      } finally {
-          setAnalyzingRisk(false);
-      }
+    if (!selectedStudent || analyzingRisk) return;
+    setAnalyzingRisk(true);
+    try {
+        const profile = `
+            Name: ${selectedStudent.name}
+            Target Country: ${selectedStudent.targetCountry}
+            GPA: ${selectedStudent.gpa || 'N/A'}
+            English Level: ${selectedStudent.testType} ${selectedStudent.testScore}
+            Gap: ${selectedStudent.educationGap || 0} years
+            Experience: ${selectedStudent.workExperience || 0} years
+            Previous Refusals: ${selectedStudent.previousRefusals ? 'Yes' : 'No'}
+            Refusal Details: ${selectedStudent.borderDetails || 'None'}
+            Financial Budget: ${selectedStudent.financialCap || 'Medium'}
+        `;
+        const result = await analyzeVisaRisk(profile, selectedStudent.targetCountry);
+        
+        const updatedStudent = {
+            ...selectedStudent,
+            riskAnalysis: {
+                date: Date.now(),
+                result: result
+            }
+        };
+        
+        const updatedList = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+        setStudents(updatedList);
+        await saveStudents(updatedList);
+        showToast("Visa Risk Report Generated Successfully");
+    } catch (err) {
+        showToast("Failed to analyze visa risk", "error");
+    } finally {
+        setAnalyzingRisk(false);
+    }
   };
 
-  const updateStudent = (updatedStudent: Student) => {
-    if (!canEdit) {
-        alert("View-only access. Cannot edit.");
-        return;
-    }
-    const updatedList = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
-    handleAsyncUpdate(updatedList);
-  };
+  const parsedRiskReport = useMemo(() => {
+    if (!selectedStudent?.riskAnalysis?.result) return null;
+    const text = selectedStudent.riskAnalysis.result;
+    
+    // Improved robust parsing for structured Gemini output
+    const getList = (header: string) => {
+        const regex = new RegExp(`${header}\\*\\*:(.*?)(?=\\n\\d\\.|\\*\\*|$)`, 'is');
+        const match = text.match(regex);
+        if (!match) return [];
+        return match[1].split('\n')
+            .filter(l => l.trim().startsWith('-') || l.trim().startsWith('*'))
+            .map(l => l.trim().substring(1).trim());
+    };
+
+    return {
+        score: text.match(/Risk Score\*\*:\s*([^\n]*)/i)?.[1]?.trim() || 'N/A',
+        probability: text.match(/Approval Probability\*\*:\s*([^\n]*)/i)?.[1]?.trim() || 'N/A',
+        strengths: getList('Key Strengths'),
+        factors: getList('Risk Factors'),
+        recommendations: getList('Recommendations')
+    };
+  }, [selectedStudent]);
 
   const handleAddStudent = async () => {
-    if (!newStudentName) {
-        alert("Please enter a student name.");
+    if (!newStudentData.name || !newStudentData.branchId || !newStudentData.intakeMonth || !newStudentData.highestQualification) {
+        showToast("Please fill all mandatory fields (marked with *)", "error");
         return;
     }
-    if (!canAddStudent) {
-        if (userRole === 'Viewer') alert("Viewers cannot add students.");
-        else alert("Plan limit reached. Please upgrade.");
-        return;
-    }
-    const isTestPrep = viewMode === 'testprep';
-    const defaultPassword = newStudentName.split(' ')[0] + '123';
-
     const newStudent: Student = {
       id: Date.now().toString(),
-      name: newStudentName,
-      email: newStudentEmail,
-      phone: newStudentPhone,
-      targetCountry: newStudentCountry,
+      name: newStudentData.name || '',
+      email: newStudentData.email || '',
+      phone: newStudentData.phone || '',
+      targetCountry: newStudentData.targetCountry || Country.Australia,
       status: ApplicationStatus.Lead,
       nocStatus: NocStatus.NotApplied,
       documents: {},
-      documentFiles: {},
-      documentDependencies: {},
-      notes: isTestPrep ? `Enrolled directly into ${newStudentBatch}` : '',
+      notes: '',
+      noteEntries: [],
       createdAt: Date.now(),
-      blockedBy: [],
-      testType: newStudentTestType as any,
-      testScore: newStudentTestScore,
-      targetScore: newStudentTargetScore,
-      gpa: newStudentGpa,
-      financialCap: newStudentFinance as any,
-      age: Number(newStudentAge) || undefined,
-      educationGap: Number(newStudentGap) || 0,
-      workExperience: Number(newStudentWorkExp) || 0,
-      previousRefusals: newStudentRefusals,
-      source: newStudentSource || 'Walk-in',
-      passportNumber: newStudentPassport,
-      dateOfBirth: newStudentDOB,
-      address: newStudentAddress,
-      gender: newStudentGender,
-      nationality: newStudentNationality,
-      portalPassword: defaultPassword,
-      messages: [],
-      testPrep: { 
-          enrolled: isTestPrep,
-          batch: isTestPrep ? newStudentBatch as any : undefined,
-          bookingStatus: 'Pending',
-          mockScores: { listening: '', reading: '', writing: '', speaking: '', overall: '' }
-      }
+      branchId: newStudentData.branchId,
+      source: newStudentData.source || 'Walk-in',
+      intakeMonth: newStudentData.intakeMonth,
+      intakeYear: newStudentData.intakeYear,
+      annualTuition: newStudentData.annualTuition,
+      highestQualification: newStudentData.highestQualification,
+      // Detailed fields
+      gender: newStudentData.gender,
+      dateOfBirth: newStudentData.dateOfBirth,
+      passportNumber: newStudentData.passportNumber,
+      nationality: newStudentData.nationality,
+      gpa: newStudentData.gpa,
+      testType: newStudentData.testType as any,
+      testScore: newStudentData.testScore,
+      educationGap: newStudentData.educationGap,
+      previousRefusals: newStudentData.previousRefusals,
+      borderDetails: newStudentData.borderDetails,
+      ocrConfidence: newStudentData.ocrConfidence
     };
     
     const updated = [newStudent, ...students];
     await handleAsyncUpdate(updated);
-    logActivity('CREATE', 'Student', `Created new student: ${newStudentName} (Source: ${newStudentSource})`);
+    logActivity('CREATE', 'Student', `Created detailed profile for: ${newStudent.name}`);
     setIsAdding(false);
-    
-    // Reset Form
-    setNewStudentName(''); setNewStudentEmail(''); setNewStudentPhone(''); setNewStudentTestScore(''); setNewStudentTargetScore('');
-    setNewStudentGpa(''); setNewStudentAge(''); setNewStudentGap(''); setNewStudentWorkExp('');
-    setNewStudentRefusals(false); setNewStudentSource('Walk-in'); setNewStudentPassport('');
-    setNewStudentAddress(''); setNewStudentDOB('');
-    setNewStudentGender('Male'); setNewStudentNationality('');
-    
+    // Reset form
+    setNewStudentData({
+        name: '', email: '', phone: '', targetCountry: settings?.defaultCountry || Country.Australia,
+        gender: 'Male', dateOfBirth: '', passportNumber: '', nationality: 'Nepalese',
+        highestQualification: 'Undergraduate (+2)', gpa: '', testType: 'None', testScore: '',
+        intakeMonth: 'September', intakeYear: '2025', annualTuition: 0,
+        educationGap: 0, previousRefusals: false, borderDetails: '', source: 'Walk-in',
+        branchId: 'main',
+        ocrConfidence: undefined
+    });
     setSelectedStudentId(newStudent.id);
+    showToast("Student profile created.");
   };
 
-  const handleSaveProfile = () => {
-      if (!selectedStudent) return;
-      updateStudent({ ...selectedStudent, ...editFormData as Student });
-      logActivity('UPDATE', 'Student', `Updated profile details for ${selectedStudent.name}`);
-      alert("Profile updated successfully");
+  const handleScanPassport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setScanningPassport(true);
+      try {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+              const base64Data = (event.target?.result as string).split(',')[1];
+              const result = await extractPassportData(base64Data, file.type);
+              if (result) {
+                  setNewStudentData(prev => ({
+                      ...prev,
+                      name: result.name || prev.name,
+                      passportNumber: result.passportNumber || prev.passportNumber,
+                      dateOfBirth: result.dateOfBirth || prev.dateOfBirth,
+                      nationality: result.nationality || prev.nationality,
+                      gender: result.gender as any || prev.gender,
+                      ocrConfidence: result.confidenceScore
+                  }));
+                  const confPct = Math.round((result.confidenceScore || 0) * 100);
+                  showToast(`✅ AI Scan successful! (${confPct}% Confidence)`);
+              }
+          };
+          reader.readAsDataURL(file);
+      } catch (err: any) {
+          showToast("OCR Error: Could not read passport image.", "error");
+      } finally {
+          setScanningPassport(false);
+          e.target.value = '';
+      }
   };
 
-  const handleStatusChange = async (newStatus: ApplicationStatus) => {
-    if (!selectedStudent || !canEdit) return;
-    logActivity('UPDATE', 'Student', `Changed status of ${selectedStudent.name} to ${newStatus}`);
-    updateStudent({ ...selectedStudent, status: newStatus });
-    await runStatusAutomation(selectedStudent, newStatus);
-    if (newStatus === ApplicationStatus.VisaGranted) {
-        setVisaCommission('100000');
-        setShowVisaWorkflow(true);
+  const handleDeleteDocument = async (docName: string) => {
+    if (!selectedStudent || !window.confirm(`Are you sure you want to delete ${docName}?`)) return;
+    
+    try {
+        const file = selectedStudent.documentFiles?.[docName];
+        if (file) {
+            await deleteFile(file.key);
+        }
+
+        const updatedDocs = { ...selectedStudent.documents };
+        delete updatedDocs[docName];
+        
+        const updatedFiles = { ...(selectedStudent.documentFiles || {}) };
+        delete updatedFiles[docName];
+
+        const updated = { ...selectedStudent, documents: updatedDocs, documentFiles: updatedFiles };
+        await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
+        logActivity('DELETE', 'File', `Deleted document: ${docName} for ${selectedStudent.name}`);
+        showToast(`Removed ${docName}.`);
+    } catch (err: any) {
+        showToast("Error deleting document.", "error");
     }
   };
 
-  // Bundle Logic
-  const validateBundleRequirements = () => {
-      if (!selectedStudent) return [];
-      const missing = [];
-      const docs = selectedStudent.documents || {};
-      if (docs['Passport (Valid 6mo+)'] !== 'Uploaded') missing.push('Passport');
-      if (docs['SLC/SEE Marksheet'] !== 'Uploaded') missing.push('SLC Marksheet');
-      return missing;
+  const handleAddNote = async () => {
+      if (!selectedStudent || !newNoteText.trim()) return;
+      
+      const newEntry: NoteEntry = {
+          id: Date.now().toString(),
+          text: newNoteText,
+          type: newNoteType,
+          timestamp: Date.now(),
+          createdBy: getCurrentUser()?.name || 'Agent',
+          isPinned: false
+      };
+
+      const updatedEntries = [newEntry, ...(selectedStudent.noteEntries || [])];
+      const updated = { ...selectedStudent, noteEntries: updatedEntries };
+      await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
+      
+      setNewNoteText('');
+      showToast("Note added to timeline.");
   };
 
-  const handleGenerateBundle = async () => {
-      if (!selectedStudent || !settings) return;
-      const missing = validateBundleRequirements();
-      if (missing.length > 0) {
-          alert(`Cannot generate bundle. Missing critical documents:\n\n- ${missing.join('\n- ')}`);
-          return;
-      }
-      setIsBundling(true);
-      try {
-          const zipBlob = await generatePartnerBundle(selectedStudent, settings.agencyName);
-          setBundleReady(zipBlob);
-          setSecureLink(`https://portal.${settings.agencyName.toLowerCase().replace(/\s/g,'')}.com/s/${selectedStudent.id}/bundle`);
-          setShowBundleModal(true);
-          logActivity('EXPORT', 'File', `Generated Partner Bundle for ${selectedStudent.name}`);
-      } catch (err) {
-          console.error(err);
-          alert("Failed to generate bundle.");
-      } finally {
-          setIsBundling(false);
-      }
-  };
-
-  const downloadBundle = () => {
-      if (!bundleReady || !selectedStudent) return;
-      const url = window.URL.createObjectURL(bundleReady);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedStudent.name.replace(/\s/g,'_')}_Partner_Packet.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-  };
-
-  const copySecureLink = () => {
-      navigator.clipboard.writeText(secureLink);
-      alert("Secure link copied to clipboard!");
-  };
-
-  const openWhatsApp = (type: 'update' | 'docs' | 'congrats') => {
-      if (!selectedStudent || !settings) return;
-      setWhatsAppOpen(false);
-      let text = "";
-      if (type === 'update') {
-          const tpl = settings.templates?.whatsappUpdate || "Hi {student_name}, update on your application.";
-          text = fillTemplate(tpl, selectedStudent, settings);
-      } else if (type === 'docs') {
-          text = `Hi ${selectedStudent.name}, please upload pending documents.`;
-      } else {
-          text = `Congratulations ${selectedStudent.name}! Visa Granted!`;
-      }
-      window.open(generateWhatsAppLink(selectedStudent.phone, text), '_blank');
-  };
-
-  const handleDeleteStudent = () => {
+  const togglePinNote = async (noteId: string) => {
       if (!selectedStudent) return;
-      if (!canDelete) { alert("Only Owners can delete."); return; }
-      if (window.confirm("Delete student permanently?")) {
-          logActivity('DELETE', 'Student', `Deleted student: ${selectedStudent.name}`);
-          const updatedList = students.filter(s => s.id !== selectedStudent.id);
-          handleAsyncUpdate(updatedList);
-          setSelectedStudentId(null);
-      }
+      const updatedEntries = (selectedStudent.noteEntries || []).map(n => 
+          n.id === noteId ? { ...n, isPinned: !n.isPinned } : n
+      );
+      const updated = { ...selectedStudent, noteEntries: updatedEntries };
+      await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
   };
 
-  // Helper for rendering docs
-  const renderDocumentItem = (doc: DocRequirement) => {
+  const deleteNote = async (noteId: string) => {
+      if (!selectedStudent || !window.confirm("Remove this note permanently?")) return;
+      const updatedEntries = (selectedStudent.noteEntries || []).filter(n => n.id !== noteId);
+      const updated = { ...selectedStudent, noteEntries: updatedEntries };
+      await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
+  };
+
+  const renderDocumentItem = (doc: DocRequirement, isCountrySpecific: boolean = false) => {
     if(!selectedStudent) return null;
     const status = selectedStudent.documents[doc.name] || 'Pending';
     const storedFile = selectedStudent.documentFiles?.[doc.name];
-    const fileData = typeof storedFile === 'string' ? { filename: storedFile } : storedFile;
+    const isUploaded = status === 'Uploaded';
     
     return (
-        <div key={doc.name} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 gap-4">
+        <div key={doc.name} className={`group p-4 flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-50 last:border-0 gap-4 transition-all ${isUploaded ? 'bg-white' : 'bg-slate-50/30'}`}>
             <div className="flex items-start space-x-3 flex-1">
-                <div className={`p-2 rounded-lg mt-1 ${
-                    status === 'Uploaded' ? 'bg-green-100 text-green-600' : 
-                    status === 'NotRequired' ? 'bg-slate-100 text-slate-400' :
-                    'bg-amber-50 text-amber-500'
-                }`}>
-                    {status === 'Uploaded' ? <Check size={16} /> : status === 'NotRequired' ? <Ban size={16}/> : <AlertCircle size={16} />}
+                <div className={`p-2.5 rounded-xl mt-0.5 transition-colors ${isUploaded ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'}`}>
+                    {isUploaded ? <FileCheck size={20} /> : <FileText size={20} />}
                 </div>
-                <div>
-                    <div className="flex items-center space-x-2">
-                         <p className={`text-sm font-medium ${status === 'Uploaded' ? 'text-slate-800' : 'text-slate-600'}`}>{doc.name}</p>
-                         <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{doc.category}</span>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center flex-wrap gap-2">
+                         <p className={`text-sm font-bold truncate ${isUploaded ? 'text-slate-800' : 'text-slate-500'}`}>{doc.name}</p>
+                         {isCountrySpecific && (
+                             <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">Required for {selectedStudent.targetCountry}</span>
+                         )}
                     </div>
-                    {doc.condition && <p className="text-[10px] text-amber-600 font-medium mt-0.5">({doc.condition})</p>}
-                    {fileData && (
-                        <div className="flex items-center space-x-3 mt-1.5 bg-slate-50 px-2 py-1 rounded w-fit">
-                            <span className="text-[10px] text-indigo-600 font-medium truncate max-w-[150px]">{fileData.filename}</span>
-                        </div>
+                    {doc.condition && <p className="text-[10px] text-amber-600 font-bold mt-0.5 uppercase tracking-wide">⚠️ {doc.condition}</p>}
+                    {storedFile ? (
+                        <p className="text-[10px] text-indigo-600 font-mono mt-1 flex items-center">
+                            <span className="truncate max-w-[200px]">{storedFile.filename}</span>
+                            <span className="mx-1">•</span>
+                            <span>{(storedFile.size / 1024).toFixed(1)} KB</span>
+                        </p>
+                    ) : (
+                        <p className="text-[10px] text-slate-400 mt-1 italic">Waiting for upload...</p>
                     )}
                 </div>
             </div>
-            <div className="flex items-center space-x-3">
-                <select 
-                    value={status}
-                    onChange={(e) => {
-                        if (!selectedStudent) return;
-                        const updatedDocs = { ...selectedStudent.documents, [doc.name]: e.target.value as DocumentStatus };
-                        updateStudent({ ...selectedStudent, documents: updatedDocs });
-                    }}
-                    className={`text-xs font-bold py-1.5 pl-2 pr-6 rounded-lg appearance-none cursor-pointer outline-none transition-colors border ${
-                        status === 'Uploaded' ? 'bg-green-50 text-green-700 border-green-200' :
-                        status === 'NotRequired' ? 'bg-slate-100 text-slate-500 border-slate-200' :
-                        'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                    style={{backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: `right 0.2rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em 1.2em`}}
-                >
-                    <option value="Pending">Pending</option>
-                    <option value="Uploaded">Uploaded</option>
-                    <option value="NotRequired">N/A</option>
-                </select>
-                <label className={`cursor-pointer p-2 rounded-lg transition-all flex items-center justify-center border ${
-                    status === 'Uploaded' 
-                    ? 'text-slate-400 border-slate-200 hover:text-indigo-600 hover:border-indigo-200' 
-                    : 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
-                }`} title="Upload File">
-                    {uploadingDoc === doc.name ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+            <div className="flex items-center space-x-2">
+                {isUploaded && (
+                    <>
+                        <button 
+                            onClick={() => window.open(storedFile?.url, '_blank')}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            title="View Document"
+                        >
+                            <Eye size={18} />
+                        </button>
+                        <button 
+                            onClick={() => handleDeleteDocument(doc.name)}
+                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            title="Delete Document"
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    </>
+                )}
+                <label className={`cursor-pointer p-2 rounded-xl transition-all shadow-sm ${isUploaded ? 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}`}>
+                    {uploadingDoc === doc.name ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
                     <input type="file" className="hidden" onChange={async (e) => {
                         const file = e.target.files?.[0];
-                        if (!file || !selectedStudent) return;
+                        if (!file) return;
                         setUploadingDoc(doc.name);
                         try {
-                            const storedFile = await uploadFile(file, `students/${selectedStudent.id}`, getCurrentUser()?.name || 'Unknown');
-                            const updatedFiles = { ...(selectedStudent.documentFiles || {}), [doc.name]: storedFile };
+                            const sf = await uploadFile(file, `students/${selectedStudent.id}`, getCurrentUser()?.name || 'Unknown');
+                            const updatedFiles = { ...(selectedStudent.documentFiles || {}), [doc.name]: sf };
                             const updatedDocs = { ...selectedStudent.documents, [doc.name]: 'Uploaded' as DocumentStatus };
-                            updateStudent({ ...selectedStudent, documentFiles: updatedFiles, documents: updatedDocs });
-                            setUploadSuccess(doc.name); setTimeout(()=>setUploadSuccess(null), 3000);
-                        } catch (err: any) { alert(err.message); } finally { setUploadingDoc(null); }
-                        e.target.value = '';
-                    }} disabled={uploadingDoc === doc.name} />
+                            const updated = { ...selectedStudent, documentFiles: updatedFiles, documents: updatedDocs };
+                            await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
+                            showToast(`Uploaded ${doc.name} successfully.`);
+                        } catch (err: any) { 
+                            showToast(err.message || "Failed to upload document.", "error");
+                        } finally { setUploadingDoc(null); }
+                    }} />
                 </label>
             </div>
         </div>
     );
   };
 
-  const getStatusColor = (status: ApplicationStatus) => {
-    switch (status) {
-      case ApplicationStatus.Lead: return 'bg-slate-100 text-slate-700';
-      case ApplicationStatus.Applied: return 'bg-blue-100 text-blue-700';
-      case ApplicationStatus.OfferReceived: return 'bg-yellow-100 text-yellow-700';
-      case ApplicationStatus.VisaGranted: return 'bg-green-100 text-green-700';
-      case ApplicationStatus.VisaRejected: return 'bg-red-100 text-red-700';
-      default: return 'bg-slate-100 text-slate-700';
+  const filteredStudents = useMemo(() => students.filter(s => {
+      const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.phone.includes(searchTerm);
+      const matchStatus = statusFilter === 'All' || s.status === statusFilter;
+      return matchSearch && matchStatus;
+  }), [students, searchTerm, statusFilter]);
+
+  // Virtualization constants
+  const CARD_HEIGHT = 192;
+  const GAP = 24;
+  const ITEM_FULL_HEIGHT = CARD_HEIGHT + GAP;
+  
+  const itemsPerRow = useMemo(() => {
+    if (typeof window === 'undefined') return 3;
+    if (window.innerWidth >= 1024) return 3;
+    if (window.innerWidth >= 768) return 2;
+    return 1;
+  }, [loading, selectedStudentId]);
+
+  const virtualItems = useMemo(() => {
+    const rowCount = Math.ceil(filteredStudents.length / itemsPerRow);
+    const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_FULL_HEIGHT) - 2);
+    const endIndex = Math.min(rowCount, Math.ceil((scrollTop + containerHeight) / ITEM_FULL_HEIGHT) + 2);
+    
+    return {
+      rows: Array.from({ length: endIndex - startIndex }, (_, i) => startIndex + i),
+      totalHeight: rowCount * ITEM_FULL_HEIGHT,
+      offset: startIndex * ITEM_FULL_HEIGHT
+    };
+  }, [filteredStudents, scrollTop, containerHeight, itemsPerRow]);
+
+  const allSelectedDocs = selectedStudent ? getRequiredDocuments(selectedStudent) : [];
+  const categories = Array.from(new Set(allSelectedDocs.map(d => d.category)));
+
+  const getNoteTypeStyles = (type: NoteType) => {
+    switch(type) {
+      case 'Counselling': return { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: <MessageSquare size={14}/> };
+      case 'FollowUp': return { bg: 'bg-blue-50', text: 'text-blue-700', icon: <Calendar size={14}/> };
+      case 'Warning': return { bg: 'bg-rose-50', text: 'text-rose-700', icon: <TriangleAlert size={14}/> };
+      case 'Financial': return { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: <DollarSign size={14}/> };
+      default: return { bg: 'bg-slate-50', text: 'text-slate-700', icon: <StickyNote size={14}/> };
     }
   };
 
-  const filteredStudents = students.filter(s => {
-      const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          s.phone.includes(searchTerm);
-      const matchStatus = statusFilter === 'All' || s.status === statusFilter;
-      const matchMode = viewMode === 'consultancy' ? true : s.testPrep?.enrolled;
-      return matchSearch && matchStatus && matchMode;
-  });
-
-  if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
+  const currencySymbol = settings?.currency || 'NPR';
 
   return (
-    <div className="flex h-full bg-slate-50">
+    <div className="flex h-full bg-slate-50 relative">
       
-      {/* List View */}
-      <div className={`w-full flex flex-col bg-white transition-all ${selectedStudentId ? 'hidden' : 'flex'}`}>
-        <div className="p-6 border-b border-slate-100 space-y-4 max-w-7xl mx-auto w-full">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-             <div>
-                <h1 className="text-2xl font-bold text-slate-900">Student Manager</h1>
-                <p className="text-slate-500 text-sm">Manage applications, documents, and test prep.</p>
-             </div>
-             <div className="flex space-x-3 w-full sm:w-auto">
-                 <div className="flex bg-slate-100 rounded-lg p-1">
-                     <button onClick={() => setViewMode('consultancy')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'consultancy' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Consultancy</button>
-                     <button onClick={() => setViewMode('testprep')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'testprep' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Test Prep</button>
-                 </div>
-                 <button onClick={() => setIsAdding(true)} disabled={!canAddStudent} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center disabled:opacity-50">
-                    <Plus size={18} className="mr-2" /> Add Student
-                 </button>
-             </div>
+      {/* Premium Toast Implementation */}
+      {toast && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
+              <div className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 border ${
+                  toast.type === 'error' ? 'bg-rose-600 border-rose-500 text-white' : 'bg-emerald-600 border-emerald-500 text-white'
+              }`}>
+                  <div className="bg-white/20 p-1.5 rounded-lg">
+                      {toast.type === 'error' ? <ShieldAlert size={20} /> : <CheckCircle2 size={20} />}
+                  </div>
+                  <p className="font-bold text-sm tracking-tight">{toast.msg}</p>
+                  <button onClick={() => setToast(null)} className="ml-4 opacity-50 hover:opacity-100 transition-opacity">
+                      <X size={18} />
+                  </button>
+              </div>
           </div>
-          <div className="flex gap-4">
+      )}
+
+      {/* List View */}
+      <div className={`w-full flex flex-col bg-white ${selectedStudentId ? 'hidden' : 'flex'}`}>
+        <div className="p-6 border-b border-slate-100 space-y-4 max-w-7xl mx-auto w-full">
+          <div className="flex justify-between items-center">
+             <h1 className="text-2xl font-bold text-slate-900">Student Manager</h1>
+             <button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center shadow-md transition-all active:scale-95"><Plus size={18} className="mr-2" /> Add Student</button>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input type="text" placeholder="Search..." className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+               <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+               <input 
+                type="text" 
+                placeholder="Search students by name or phone..." 
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+               />
              </div>
-             {viewMode === 'consultancy' && (
-                 <select className="p-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                     <option value="All">All Statuses</option>
-                     {Object.values(ApplicationStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                 </select>
-             )}
+             <div className="flex gap-2">
+                <select 
+                  className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="All">All Statuses</option>
+                  {Object.values(ApplicationStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+             </div>
           </div>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-          <div className="max-w-7xl mx-auto">
-            {filteredStudents.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-100 border-dashed">
-                    <User size={48} className="mx-auto mb-4 opacity-20"/>
-                    <p className="text-lg font-medium">No students found.</p>
-                </div>
-            ) : viewMode === 'testprep' ? (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                   <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-left">
-                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
-                             <tr>
-                                 <th className="px-6 py-4">Student Name</th>
-                                 <th className="px-6 py-4">Contact</th>
-                                 <th className="px-6 py-4">Exam Target</th>
-                                 <th className="px-6 py-4">Batch</th>
-                                 <th className="px-6 py-4">Exam Date</th>
-                                 <th className="px-6 py-4">Status</th>
-                                 <th className="px-6 py-4 text-right">Action</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-100">
-                            {filteredStudents.map(student => (
-                                <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4 font-bold text-slate-800">{student.name}</td>
-                                    <td className="px-6 py-4 text-slate-500">{student.phone}</td>
-                                    <td className="px-6 py-4"><span className="bg-slate-100 px-2 py-1 rounded font-mono text-xs">{student.testType}</span></td>
-                                    <td className="px-6 py-4 text-slate-600">{student.testPrep?.batch || 'No Batch'}</td>
-                                    <td className="px-6 py-4 text-slate-500">{student.testPrep?.examDate ? new Date(student.testPrep.examDate).toLocaleDateString() : '-'}</td>
-                                    <td className="px-6 py-4">
-                                         <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${student.testPrep?.bookingStatus === 'Booked' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{student.testPrep?.bookingStatus || 'Pending'}</span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button onClick={() => setSelectedStudentId(student.id)} className="text-indigo-600 hover:text-indigo-800 font-bold text-xs">View Details</button>
-                                    </td>
-                                </tr>
-                            ))}
-                         </tbody>
-                      </table>
-                   </div>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredStudents.map((student) => (
-                    <div key={student.id} onClick={() => setSelectedStudentId(student.id)} className="group bg-white p-5 rounded-2xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all flex flex-col justify-between h-48">
-                      <div>
-                          <div className="flex justify-between items-start mb-3">
-                            <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ${student.status === ApplicationStatus.VisaGranted ? 'bg-emerald-500' : 'bg-indigo-500'}`}>{student.name.charAt(0)}</div>
-                            <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide ${getStatusColor(student.status)}`}>{student.status}</span>
-                          </div>
-                          <h3 className="font-bold text-lg text-slate-900 truncate mb-1 group-hover:text-indigo-600 transition-colors">{student.name}</h3>
-                          <p className="text-xs text-slate-400 mb-4">{student.email || 'No email'}</p>
-                      </div>
-                      <div className="pt-4 border-t border-slate-50 flex justify-between items-center text-xs text-slate-500">
-                        <span className="flex items-center"><MapPin size={12} className="mr-1"/> {student.targetCountry}</span>
-                        <span className="flex items-center"><Phone size={12} className="mr-1"/> {student.phone}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-            )}
-          </div>
+
+        {/* Scrollable Container with Virtualization */}
+        <div 
+          ref={containerRef}
+          onScroll={onScroll}
+          className="flex-1 overflow-y-auto p-6 bg-slate-50 relative custom-scrollbar"
+        >
+          {loading ? (
+            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 9 }).map((_, i) => <StudentSkeleton key={i} />)}
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+              <User size={48} className="mb-2 opacity-20" />
+              <p className="font-bold">No students found</p>
+              <p className="text-sm">Try adjusting your filters or search terms.</p>
+            </div>
+          ) : (
+            <div className="max-w-7xl mx-auto" style={{ height: virtualItems.totalHeight, position: 'relative' }}>
+              <div 
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                style={{ transform: `translateY(${virtualItems.offset}px)` }}
+              >
+                {virtualItems.rows.map(rowIndex => {
+                  const rowItems = filteredStudents.slice(rowIndex * itemsPerRow, (rowIndex + 1) * itemsPerRow);
+                  return rowItems.map(student => (
+                    <StudentCard 
+                      key={student.id} 
+                      student={student} 
+                      onClick={setSelectedStudentId} 
+                    />
+                  ));
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Details View */}
-      <div className={`w-full flex flex-col bg-slate-50 transition-all ${selectedStudentId ? 'flex' : 'hidden'}`}>
-        {selectedStudent ? (
-          <>
-            <div className="bg-white border-b border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sticky top-0 z-30 shadow-sm">
-               <div className="flex items-center">
-                   <button onClick={() => setSelectedStudentId(null)} className="mr-4 p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors group"><ArrowLeft size={24} className="group-hover:text-indigo-600 transition-colors" /></button>
-                   <div className="h-12 w-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">{selectedStudent.name.charAt(0)}</div>
-                   <div className="ml-4">
-                       <h2 className="text-xl font-bold text-slate-900 flex items-center">{selectedStudent.name} {selectedStudent.status === ApplicationStatus.VisaGranted && <span className="ml-3 flex items-center text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200"><Sparkles size={10} className="mr-1" /> Complete</span>}</h2>
-                       <div className="flex items-center space-x-4 text-sm text-slate-500 mt-1">
-                           <span className="flex items-center"><Mail size={14} className="mr-1"/> {selectedStudent.email || 'No email'}</span>
-                           <span className="flex items-center"><Phone size={14} className="mr-1"/> {selectedStudent.phone}</span>
-                       </div>
-                   </div>
-               </div>
-               
-               <div className="flex space-x-2 w-full md:w-auto">
-                   <select value={selectedStudent.status} onChange={(e) => handleStatusChange(e.target.value as ApplicationStatus)} disabled={!canEdit} className="px-3 py-2 rounded-lg text-sm font-bold border-none outline-none cursor-pointer shadow-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
-                       {Object.values(ApplicationStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                   </select>
-                   <button onClick={() => setWhatsAppOpen(!whatsAppOpen)} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors relative">
-                       <MessageCircle size={20} />
-                       {whatsAppOpen && (
-                           <div className="absolute right-0 top-12 w-48 bg-white shadow-xl rounded-xl border border-slate-100 z-50 p-1 flex flex-col">
-                               <button onClick={() => openWhatsApp('update')} className="text-left px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-medium">Send Status Update</button>
-                               <button onClick={() => openWhatsApp('docs')} className="text-left px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-medium">Request Documents</button>
-                               <button onClick={() => openWhatsApp('congrats')} className="text-left px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-medium">Visa Congratulation</button>
-                           </div>
-                       )}
-                   </button>
-                   {canDelete && <button onClick={handleDeleteStudent} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={20} /></button>}
-               </div>
-            </div>
-
-            <div className="bg-white border-b border-slate-200 px-6">
-                <div className="flex space-x-6 overflow-x-auto max-w-7xl mx-auto">
-                    {[{id:'documents', label:'Documents', icon:FolderOpen}, {id:'profile', label:'Profile', icon:User}, {id:'testprep', label:'Test Prep', icon:BookOpen}, {id:'notes', label:'Notes & Timeline', icon:FileText}].map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center space-x-2 py-4 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                            <tab.icon size={16} /> <span>{tab.label}</span>
+      {/* Detailed View */}
+      {selectedStudent && (
+          <div className={`w-full flex flex-col bg-slate-50 ${selectedStudentId ? 'flex' : 'hidden'}`}>
+             <div className="bg-white border-b p-6 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+                 <div className="flex items-center">
+                    <button onClick={() => setSelectedStudentId(null)} className="mr-4 p-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft size={24}/></button>
+                    <div><h2 className="text-xl font-bold text-slate-900">{selectedStudent.name}</h2><p className="text-xs text-slate-500">{selectedStudent.email || 'No email'}</p></div>
+                 </div>
+                 <div className="flex items-center space-x-3">
+                    {activeTab === 'financials' && (
+                        <button 
+                            onClick={() => setIsCreatingInvoice(true)}
+                            className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold flex items-center shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
+                        >
+                            <Plus size={18} className="mr-2"/> Create Invoice
                         </button>
-                    ))}
-                </div>
-            </div>
+                    )}
+                    <button className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold flex items-center shadow-lg hover:bg-indigo-700 active:scale-95" onClick={handleSaveProfile} disabled={isSaving}>
+                        {isSaving ? <Loader2 size={18} className="animate-spin mr-2"/> : <Save size={18} className="mr-2"/>} Save Profile
+                    </button>
+                 </div>
+             </div>
+             <div className="bg-white border-b px-6 flex space-x-6">
+                 {['documents', 'profile', 'risk', 'financials', 'notes'].map(tab => (
+                     <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 border-b-2 text-sm font-bold uppercase transition-colors ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>{tab}</button>
+                 ))}
+             </div>
+             <div className="flex-1 overflow-y-auto">
+                 {activeTab === 'profile' && (
+                     <div className="p-8 overflow-y-auto bg-slate-50 min-h-full">
+                         <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                             <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 space-y-8">
+                                 <div>
+                                     <h3 className="text-xl font-bold text-slate-800">Student Profile Information</h3>
+                                     <p className="text-sm text-slate-500 mt-1">Manage core applicant identity, academics, and risk factors.</p>
+                                 </div>
+                                 
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                         <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.email || ''} onChange={e => setEditFormData({...editFormData, email: e.target.value})} />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                         <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.phone || ''} onChange={e => setEditFormData({...editFormData, phone: e.target.value})} />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Passport Number</label>
+                                         <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.passportNumber || ''} onChange={e => setEditFormData({...editFormData, passportNumber: e.target.value})} />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                                         <input type="date" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.dateOfBirth || ''} onChange={e => setEditFormData({...editFormData, dateOfBirth: e.target.value})} />
+                                     </div>
 
-            <div className="flex-1 overflow-y-auto p-8">
-                {activeTab === 'documents' && (
-                    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex justify-end">
-                            <button onClick={handleGenerateBundle} disabled={isBundling} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center shadow-lg hover:bg-indigo-600 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
-                                {isBundling ? <Loader2 className="animate-spin mr-2"/> : <Package className="mr-2" size={18}/>}
-                                {isBundling ? 'Preparing Bundle...' : 'Generate Partner Packet'}
-                            </button>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex justify-between items-center"><span className="flex items-center"><Globe size={16} className="mr-2 text-indigo-500"/> Universal Core</span></div>
-                            <div className="divide-y divide-slate-50">{UNIVERSAL_DOCS.map(doc => renderDocumentItem(doc))}</div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex justify-between items-center"><span className="flex items-center"><MapPin size={16} className="mr-2 text-indigo-500"/> {selectedStudent.targetCountry} Specific</span></div>
-                            <div className="divide-y divide-slate-50">{(COUNTRY_SPECIFIC_DOCS[selectedStudent.targetCountry] || []).map(doc => renderDocumentItem(doc))}</div>
-                        </div>
-                    </div>
-                )}
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Cumulative GPA / Score</label>
+                                         <input type="text" placeholder="e.g. 3.65 or 80%" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={editFormData.gpa || ''} onChange={e => setEditFormData({...editFormData, gpa: e.target.value})} />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Education Gap (Years)</label>
+                                         <input type="number" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.educationGap || ''} onChange={e => setEditFormData({...editFormData, educationGap: parseInt(e.target.value) || 0})} />
+                                     </div>
 
-                {activeTab === 'testprep' && (
-                    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="space-y-6">
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                                <h3 className="font-bold text-slate-800 flex items-center"><BookOpen className="mr-2 text-indigo-600"/> Academic Profile</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Test Type</label><select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50" value={editFormData.testType} onChange={(e) => setEditFormData({...editFormData, testType: e.target.value as any})}><option value="IELTS">IELTS</option><option value="PTE">PTE</option><option value="TOEFL">TOEFL</option><option value="None">None</option></select></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Score</label><input className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50" placeholder="e.g. 7.0" value={editFormData.targetScore} onChange={(e) => setEditFormData({...editFormData, targetScore: e.target.value})}/></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">GPA / Percentage</label><input className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50" placeholder="e.g. 3.6 or 80%" value={editFormData.gpa} onChange={(e) => setEditFormData({...editFormData, gpa: e.target.value})}/></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Real Score</label><input className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50 font-bold text-indigo-600" placeholder="Pending" value={editFormData.testScore} onChange={(e) => setEditFormData({...editFormData, testScore: e.target.value})}/></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="space-y-6">
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
-                                <h3 className="font-bold text-slate-800 flex items-center"><Calendar className="mr-2 text-indigo-600"/> Exam Administration</h3>
-                                <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Exam Date</label><input type="date" className="w-full p-2 border border-slate-200 rounded-lg text-sm" value={editFormData.testPrep?.examDate ? new Date(editFormData.testPrep.examDate).toISOString().split('T')[0] : ''} onChange={(e) => setEditFormData({...editFormData, testPrep: { ...editFormData.testPrep!, examDate: new Date(e.target.value).getTime() }})}/></div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Booking Status</label><select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white" value={editFormData.testPrep?.bookingStatus} onChange={(e) => setEditFormData({...editFormData, testPrep: { ...editFormData.testPrep!, bookingStatus: e.target.value as any }})}><option value="Pending">Pending</option><option value="Booked">Booked</option><option value="Completed">Completed</option></select></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="lg:col-span-2"><button onClick={handleSaveProfile} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg">Save Test Prep Details</button></div>
-                    </div>
-                )}
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">English Test Type</label>
+                                         <select className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.testType || 'None'} onChange={e => setEditFormData({...editFormData, testType: e.target.value as any})}>
+                                             <option value="None">None</option>
+                                             <option value="IELTS">IELTS</option>
+                                             <option value="PTE">PTE</option>
+                                             <option value="TOEFL">TOEFL</option>
+                                         </select>
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Target Score</label>
+                                         <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" placeholder="e.g. 7.5 or 79" value={editFormData.targetScore || ''} onChange={e => setEditFormData({...editFormData, targetScore: e.target.value})} />
+                                     </div>
 
-                {activeTab === 'profile' && (
-                    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Portal Credentials */}
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 shadow-sm">
-                            <h3 className="font-bold text-indigo-900 flex items-center mb-4"><Key className="mr-2 text-indigo-600"/> Client Portal Access</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div><label className="text-xs font-bold text-indigo-700 uppercase mb-1 block">Portal Login Email</label><p className="font-mono text-sm bg-white px-3 py-2 rounded border border-indigo-200 text-slate-700">{selectedStudent.email || 'No email set'}</p></div>
-                                <div><label className="text-xs font-bold text-indigo-700 uppercase mb-1 block">Access Password</label><p className="font-mono text-lg font-bold bg-white px-3 py-1.5 rounded border border-indigo-200 text-slate-800 min-w-[120px]">{selectedStudent.portalPassword || 'Not Set'}</p></div>
-                            </div>
-                        </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Financial Capacity</label>
+                                         <select 
+                                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" 
+                                            value={editFormData.financialCap || 'Medium'} 
+                                            onChange={e => setEditFormData({...editFormData, financialCap: e.target.value as any})}
+                                         >
+                                             <option value="Low">Low (Budget Friendly)</option>
+                                             <option value="Medium">Medium (Standard)</option>
+                                             <option value="Satisfactory">Satisfactory (Standard)</option>
+                                             <option value="High">High (Strong)</option>
+                                         </select>
+                                     </div>
 
-                        {/* OCR */}
-                        <div className="bg-slate-900 text-white rounded-xl p-6 relative overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4">
-                             <div className="relative z-10"><h3 className="font-bold text-lg flex items-center mb-1"><ScanFace className="mr-2"/> AI Profile Update</h3><p className="text-slate-300 text-sm">Scan a new passport to auto-update details instantly.</p></div>
-                             <div className="relative z-10"><label className="bg-white text-slate-900 px-4 py-2 rounded-lg font-bold text-sm cursor-pointer hover:bg-slate-100 transition-colors flex items-center">{scanningPassport ? <Loader2 className="animate-spin mr-2"/> : <UploadCloud className="mr-2"/>}{scanningPassport ? 'Scanning...' : 'Scan Passport'}<input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handlePassportScan(e, true)} disabled={scanningPassport} /></label></div>
-                        </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Previous Visa Refusals?</label>
+                                         <select className={`w-full p-4 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold ${editFormData.previousRefusals ? 'bg-red-50 text-red-600' : 'bg-slate-50'}`} value={editFormData.previousRefusals ? 'Yes' : 'No'} onChange={e => setEditFormData({...editFormData, previousRefusals: e.target.value === 'Yes'})}>
+                                             <option value="No">No (Clean History)</option>
+                                             <option value="Yes">Yes (Has Refusals)</option>
+                                         </select>
+                                     </div>
 
-                        {/* Personal Details */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                            <h3 className="text-lg font-bold mb-6 text-slate-800">Edit Personal Details</h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input className="w-full p-3 border border-slate-200 rounded-lg" value={editFormData.email} onChange={e => setEditFormData({...editFormData, email: e.target.value})} placeholder="Email"/>
-                                    <input className="w-full p-3 border border-slate-200 rounded-lg" value={editFormData.phone} onChange={e => setEditFormData({...editFormData, phone: e.target.value})} placeholder="Phone"/>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <select className="w-full p-3 border border-slate-200 rounded-lg bg-white" value={editFormData.targetCountry} onChange={e => setEditFormData({...editFormData, targetCountry: e.target.value as Country})}>{Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                    <select className="w-full p-3 border border-slate-200 rounded-lg bg-white" value={editFormData.source} onChange={e => setEditFormData({...editFormData, source: e.target.value})}>{LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                </div>
-                            </div>
-                        </div>
+                                     {editFormData.previousRefusals && (
+                                         <div className="md:col-span-2 space-y-1 animate-in fade-in slide-in-from-top-2">
+                                             <label className="text-[10px] font-bold text-rose-500 uppercase tracking-widest ml-1 flex items-center">
+                                                 <TriangleAlert size={10} className="mr-1"/> Refusal Details (Required for Risk Assessment)
+                                             </label>
+                                             <textarea 
+                                                 className="w-full p-4 border border-rose-200 rounded-2xl bg-rose-50/30 focus:bg-white focus:ring-2 focus:ring-rose-500/20 outline-none transition-all text-sm h-24"
+                                                 placeholder="List countries, years, and specific reasons for previous refusals..."
+                                                 value={editFormData.borderDetails || ''}
+                                                 onChange={e => setEditFormData({...editFormData, borderDetails: e.target.value})}
+                                             />
+                                         </div>
+                                     )}
 
-                        {/* Risk Assessment Profile */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                                    <Activity className="mr-2 text-indigo-600" size={20}/> Visa Risk Profile
-                                </h3>
-                                <button 
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nationality</label>
+                                         <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={editFormData.nationality || ''} onChange={e => setEditFormData({...editFormData, nationality: e.target.value})} />
+                                     </div>
+
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Desired Country</label>
+                                         <select 
+                                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" 
+                                            value={editFormData.targetCountry || Country.Australia} 
+                                            onChange={e => setEditFormData({...editFormData, targetCountry: e.target.value as Country})}
+                                         >
+                                             {Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}
+                                         </select>
+                                     </div>
+                                 </div>
+
+                                 {/* Partner Assignment & Financials */}
+                                 <div className="pt-8 border-t border-slate-100">
+                                     <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4"><Landmark size={16} className="mr-2"/> Partner & Financial Analysis</h4>
+                                     <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-200">
+                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                             <div className="space-y-1">
+                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned University / Partner</label>
+                                                 <div className="relative">
+                                                     <Building className="absolute left-4 top-4 text-slate-300" size={18} />
+                                                     <select 
+                                                        className="w-full pl-12 pr-4 py-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold text-slate-700"
+                                                        value={editFormData.assignedPartnerId || ''}
+                                                        onChange={handlePartnerChange}
+                                                     >
+                                                         <option value="">-- Select Partner --</option>
+                                                         {partners.map(p => <option key={p.id} value={p.id}>{p.name} ({p.commissionRate}%)</option>)}
+                                                     </select>
+                                                 </div>
+                                                 <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Commission rates are configured in the Partners Hub.</p>
+                                             </div>
+                                             
+                                             <div className="space-y-1">
+                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Est. Annual Tuition ({currencySymbol})</label>
+                                                 <div className="relative">
+                                                     <Bank className="absolute left-4 top-4 text-slate-300" size={18} />
+                                                     <input 
+                                                        type="number"
+                                                        className="w-full pl-12 pr-4 py-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-black text-slate-800"
+                                                        value={editFormData.annualTuition || 0}
+                                                        onChange={e => {
+                                                            const tuition = parseFloat(e.target.value) || 0;
+                                                            const partner = partners.find(p => p.id === editFormData.assignedPartnerId);
+                                                            const comm = partner ? (tuition * partner.commissionRate) / 100 : 0;
+                                                            setEditFormData({ ...editFormData, annualTuition: tuition, commissionAmount: comm });
+                                                        }}
+                                                     />
+                                                 </div>
+                                             </div>
+                                         </div>
+
+                                         <div className="mt-8 pt-8 border-t border-slate-200/60 flex flex-col md:flex-row justify-between items-center gap-6">
+                                              <div className="flex items-center space-x-4">
+                                                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
+                                                      <Sparkles size={20}/>
+                                                  </div>
+                                                  <div>
+                                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projected Success Revenue</p>
+                                                      <p className="text-2xl font-black text-indigo-600 font-mono tracking-tight">
+                                                          {currencySymbol} {editFormData.commissionAmount?.toLocaleString() || '0.00'}
+                                                      </p>
+                                                  </div>
+                                              </div>
+                                              <div className="text-right">
+                                                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Real-time Calculation</span>
+                                                  <p className="text-xs font-bold text-slate-400 mt-1">Based on {partners.find(p => p.id === editFormData.assignedPartnerId)?.commissionRate || 0}% Agency Agreement</p>
+                                              </div>
+                                         </div>
+                                     </div>
+                                 </div>
+
+                                 {/* Government Clearances Integration */}
+                                 <div className="pt-8 border-t border-slate-100">
+                                     <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4"><Landmark size={16} className="mr-2"/> Government Clearances</h4>
+                                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                                         <div className="flex items-center justify-between">
+                                             <div>
+                                                 <p className="text-sm font-bold text-slate-800">Applied for MoEST NOC?</p>
+                                                 <p className="text-xs text-slate-500">Choosing 'NO' will flag this student in the Operations NOC Tracker for agency assistance.</p>
+                                             </div>
+                                             <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+                                                 <button 
+                                                    onClick={() => setEditFormData({...editFormData, nocStatus: NocStatus.Applied})} 
+                                                    className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${editFormData.nocStatus !== NocStatus.NotApplied ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                                                 >
+                                                     YES
+                                                 </button>
+                                                 <button 
+                                                    onClick={() => setEditFormData({...editFormData, nocStatus: NocStatus.NotApplied})} 
+                                                    className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${editFormData.nocStatus === NocStatus.NotApplied ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                                                 >
+                                                     NO
+                                                 </button>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+
+                                 <div className="pt-6 flex justify-end">
+                                     <button className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center shadow-lg hover:bg-indigo-700 transition-all" onClick={handleSaveProfile} disabled={isSaving}>
+                                         {isSaving ? <Loader2 size={18} className="animate-spin mr-2"/> : <Save size={18} className="mr-2"/>}
+                                         Update Student Record
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+                 {activeTab === 'risk' && (
+                     <div className="p-8 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                         <div className="flex justify-between items-end mb-8">
+                             <div>
+                                 <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center">
+                                     <BrainCircuit className="mr-3 text-indigo-600" size={32} /> AI Risk Assessment
+                                 </h2>
+                                 <p className="text-slate-500 font-medium mt-1">Predictive analysis based on immigration data and student profile markers.</p>
+                             </div>
+                             {selectedStudent.riskAnalysis && (
+                                 <button 
                                     onClick={handleRunRiskAnalysis}
                                     disabled={analyzingRisk}
-                                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center shadow-lg shadow-indigo-200 disabled:opacity-50"
-                                >
-                                    {analyzingRisk ? <Loader2 className="animate-spin mr-2" size={14}/> : <Sparkles className="mr-2" size={14}/>}
-                                    Analyze with AI
-                                </button>
+                                    className="bg-white border border-slate-200 text-indigo-600 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center hover:bg-indigo-50 transition-all"
+                                 >
+                                     {analyzingRisk ? <Loader2 size={16} className="animate-spin mr-2"/> : <RefreshCcw size={16} className="mr-2"/>}
+                                     Re-Analyze Profile
+                                 </button>
+                             )}
+                         </div>
+
+                         {!selectedStudent.riskAnalysis ? (
+                             <div className="bg-white rounded-[3rem] p-12 shadow-sm border border-slate-200 flex flex-col items-center text-center">
+                                 <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+                                     <Sparkles size={48} className="text-indigo-600 animate-pulse" />
+                                 </div>
+                                 <h3 className="text-2xl font-black text-slate-800">No Assessment Data</h3>
+                                 <p className="text-slate-500 mt-3 mb-10 max-w-lg leading-relaxed">
+                                     Our AI has not yet audited this applicant's profile. Generate a report to see approval probability, identified red flags, and tailored document recommendations.
+                                 </p>
+                                 <button 
+                                    onClick={handleRunRiskAnalysis}
+                                    disabled={analyzingRisk}
+                                    className="bg-slate-900 text-white px-12 py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all flex items-center active:scale-95 disabled:opacity-50"
+                                 >
+                                     {analyzingRisk ? <Loader2 size={20} className="animate-spin mr-3"/> : <BrainCircuit size={20} className="mr-3"/>}
+                                     Start AI Profile Audit
+                                 </button>
+                             </div>
+                         ) : (
+                             <div className="space-y-8 pb-20">
+                                 {/* Summary Grid */}
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-indigo-300 transition-all">
+                                         <div>
+                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Assessment Status</p>
+                                            <div className="flex items-center space-x-4">
+                                                <div className={`p-4 rounded-3xl ${
+                                                    parsedRiskReport?.score?.toLowerCase().includes('low') ? 'bg-emerald-50 text-emerald-600' :
+                                                    parsedRiskReport?.score?.toLowerCase().includes('high') ? 'bg-rose-50 text-rose-600' :
+                                                    'bg-amber-50 text-amber-600'
+                                                }`}>
+                                                    <ShieldCheck size={32} />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-3xl font-black text-slate-900">{parsedRiskReport?.score}</h4>
+                                                    <p className="text-xs font-bold text-slate-400 uppercase mt-1">Calculated Risk Level</p>
+                                                </div>
+                                            </div>
+                                         </div>
+                                         <div className="mt-8 pt-6 border-t border-slate-50 flex items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                             <Clock size={12} className="mr-2"/> Last Update: {new Date(selectedStudent.riskAnalysis.date).toLocaleDateString()}
+                                         </div>
+                                     </div>
+
+                                     <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl shadow-slate-200 relative overflow-hidden">
+                                         <div className="relative z-10">
+                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Approval Probability</p>
+                                            <h4 className="text-6xl font-black tracking-tighter text-indigo-400">{parsedRiskReport?.probability}</h4>
+                                            <div className="mt-6 h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all duration-1000" 
+                                                    style={{ width: parsedRiskReport?.probability || '0%' }}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] mt-4 font-bold uppercase tracking-tighter text-slate-500">Based on {selectedStudent.targetCountry} immigration flow v2.4</p>
+                                         </div>
+                                         <TrendingUp size={200} className="absolute -bottom-10 -right-10 text-white/5 pointer-events-none" />
+                                     </div>
+                                 </div>
+
+                                 {/* Detailed Breakdown */}
+                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                                         <div className="flex items-center space-x-2 mb-6">
+                                             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><Trophy size={18}/></div>
+                                             <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Key Strengths</h5>
+                                         </div>
+                                         <ul className="space-y-4">
+                                             {parsedRiskReport?.strengths.map((s, i) => (
+                                                 <li key={i} className="flex items-start text-sm text-slate-600 font-medium">
+                                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 mr-3 shrink-0" />
+                                                     {s}
+                                                 </li>
+                                             ))}
+                                             {parsedRiskReport?.strengths.length === 0 && <p className="text-xs text-slate-400 italic">No significant strengths identified.</p>}
+                                         </ul>
+                                     </div>
+
+                                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                                         <div className="flex items-center space-x-2 mb-6">
+                                             <div className="p-2 bg-rose-50 text-rose-600 rounded-xl"><AlertTriangle size={18}/></div>
+                                             <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Risk Factors</h5>
+                                         </div>
+                                         <ul className="space-y-4">
+                                             {parsedRiskReport?.factors.map((f, i) => (
+                                                 <li key={i} className="flex items-start text-sm text-slate-600 font-medium">
+                                                     <div className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5 mr-3 shrink-0" />
+                                                     {f}
+                                                 </li>
+                                             ))}
+                                             {parsedRiskReport?.factors.length === 0 && <p className="text-xs text-slate-400 italic">No major red flags detected.</p>}
+                                         </ul>
+                                     </div>
+
+                                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm bg-indigo-50/20">
+                                         <div className="flex items-center space-x-2 mb-6">
+                                             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><Pencil size={18}/></div>
+                                             <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Recommendations</h5>
+                                         </div>
+                                         <ul className="space-y-4">
+                                             {parsedRiskReport?.recommendations.map((r, i) => (
+                                                 <li key={i} className="flex items-start text-sm text-slate-800 font-bold bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+                                                     <ChevronRight size={16} className="mr-2 mt-0.5 text-indigo-500 shrink-0" />
+                                                     {r}
+                                                 </li>
+                                             ))}
+                                         </ul>
+                                     </div>
+                                 </div>
+
+                                 <div className="p-6 bg-slate-900/5 rounded-3xl border border-dashed border-slate-200 text-center">
+                                     <p className="text-[11px] text-slate-400 font-bold italic">Disclaimer: AI output is for advisory purposes only. Final decisions rest with embassy case officers.</p>
+                                 </div>
+                             </div>
+                         )}
+                     </div>
+                 )}
+                 {activeTab === 'documents' && (
+                    <div className="p-8 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+                        {/* Stats Dashboard */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                             <div className="bg-indigo-600 text-white p-6 rounded-3xl shadow-xl shadow-indigo-100 flex flex-col justify-between">
+                                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Requirements</p>
+                                 <h2 className="text-4xl font-black mt-2">{allSelectedDocs.length}</h2>
+                                 <div className="mt-4 flex items-center space-x-2 bg-white/10 p-2 rounded-xl">
+                                     <ShieldCheck size={16} className="text-indigo-200"/>
+                                     <span className="text-[10px] font-bold">Compliant for {selectedStudent.targetCountry}</span>
+                                 </div>
+                             </div>
+                             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Uploaded Files</p>
+                                 <h2 className="text-4xl font-black mt-2 text-emerald-600">
+                                     {allSelectedDocs.filter(d => selectedStudent.documents[d.name] === 'Uploaded').length}
+                                 </h2>
+                                 <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                     <div 
+                                        className="h-full bg-emerald-500 transition-all duration-1000" 
+                                        style={{ width: `${(allSelectedDocs.filter(d => selectedStudent.documents[d.name] === 'Uploaded').length / allSelectedDocs.length) * 100}%` }}
+                                     ></div>
+                                 </div>
+                             </div>
+                             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Missing Docs</p>
+                                 <h2 className="text-4xl font-black mt-2 text-rose-500">
+                                     {allSelectedDocs.filter(d => selectedStudent.documents[d.name] !== 'Uploaded').length}
+                                 </h2>
+                                 <p className="text-[10px] font-bold text-rose-400 mt-4 uppercase">Submission Blocked</p>
+                             </div>
+                        </div>
+
+                        {/* Document Categories */}
+                        <div className="space-y-8 pb-20">
+                            {categories.map(cat => {
+                                const catDocs = allSelectedDocs.filter(d => d.category === cat);
+                                return (
+                                    <div key={cat} className="space-y-4">
+                                        <div className="flex items-center space-x-2 px-2">
+                                            <div className="w-1 h-4 bg-indigo-600 rounded-full"></div>
+                                            <h3 className="font-black text-slate-800 text-xs uppercase tracking-[0.2em]">{cat}</h3>
+                                            <span className="text-[10px] font-bold text-slate-400">({catDocs.length})</span>
+                                        </div>
+                                        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                                            <div className="divide-y divide-slate-100">
+                                                {catDocs.map(doc => renderDocumentItem(doc, (doc as any).isCountrySpecific))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                 )}
+                 {activeTab === 'financials' && (
+                    <div className="p-8 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-2 space-y-8">
+                         {/* Student Financial Summary */}
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><Receipt size={20}/></div>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Billed</span>
+                                </div>
+                                <h4 className="text-2xl font-black text-slate-900">{currencySymbol} {studentInvoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()}</h4>
+                                <p className="text-xs text-slate-400 mt-1">{studentInvoices.length} Invoices generated</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl"><CheckCircle2 size={20}/></div>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Collected</span>
+                                </div>
+                                <h4 className="text-2xl font-black text-emerald-600">{currencySymbol} {studentInvoices.filter(i => i.status === 'Paid').reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()}</h4>
+                                <p className="text-xs text-slate-400 mt-1">Realized revenue</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl"><Clock size={20}/></div>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outstanding</span>
+                                </div>
+                                <h4 className="text-2xl font-black text-amber-600">{currencySymbol} {studentInvoices.filter(i => i.status === 'Pending').reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()}</h4>
+                                <p className="text-xs text-slate-400 mt-1">Waiting for payment</p>
+                            </div>
+                         </div>
+
+                         {/* Invoice Ledger for Student */}
+                         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                 <h3 className="font-bold text-slate-800 text-lg flex items-center"><DollarSign size={20} className="mr-2 text-indigo-600"/> Ledger & Claims</h3>
+                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Audit Verified</span>
+                             </div>
+                             <div className="overflow-x-auto">
+                                 <table className="w-full text-left">
+                                     <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                         <tr>
+                                             <th className="px-8 py-4">Invoice #</th>
+                                             <th className="px-8 py-4">Description</th>
+                                             <th className="px-8 py-4">Amount</th>
+                                             <th className="px-8 py-4">Date</th>
+                                             <th className="px-8 py-4">Status</th>
+                                             <th className="px-8 py-4 text-right">Actions</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody className="divide-y divide-slate-50">
+                                         {studentInvoices.map(inv => (
+                                             <tr key={inv.id} className="hover:bg-indigo-50/20 transition-colors">
+                                                 <td className="px-8 py-5 font-mono text-xs font-bold text-indigo-600">{inv.invoiceNumber}</td>
+                                                 <td className="px-8 py-5 text-sm font-medium text-slate-700">{inv.description}</td>
+                                                 <td className="px-8 py-5 text-sm font-black text-slate-900">{currencySymbol} {inv.amount.toLocaleString()}</td>
+                                                 <td className="px-8 py-5 text-xs text-slate-400 font-medium">{new Date(inv.date).toLocaleDateString()}</td>
+                                                 <td className="px-8 py-5">
+                                                     <button 
+                                                        onClick={() => handleToggleInvoiceStatus(inv.id)}
+                                                        className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
+                                                            inv.status === 'Paid' 
+                                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                                            : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100'
+                                                        }`}
+                                                     >
+                                                         {inv.status}
+                                                     </button>
+                                                 </td>
+                                                 <td className="px-8 py-5 text-right space-x-2">
+                                                     <button 
+                                                        onClick={() => generateReceipt(inv, settings)}
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                                        title="Print Receipt"
+                                                     >
+                                                         <Printer size={18}/>
+                                                     </button>
+                                                 </td>
+                                             </tr>
+                                         ))}
+                                         {studentInvoices.length === 0 && (
+                                             <tr>
+                                                 <td colSpan={6} className="px-8 py-20 text-center text-slate-300">
+                                                     <Receipt size={48} className="mx-auto mb-2 opacity-10"/>
+                                                     <p className="font-bold">No invoices generated for this student.</p>
+                                                     <button 
+                                                        onClick={() => setIsCreatingInvoice(true)}
+                                                        className="text-indigo-600 text-xs font-bold underline mt-2"
+                                                     >
+                                                         Create the first one
+                                                     </button>
+                                                 </td>
+                                             </tr>
+                                         )}
+                                     </tbody>
+                                 </table>
+                             </div>
+                         </div>
+                    </div>
+                 )}
+                 {activeTab === 'notes' && (
+                    <div className="p-8 max-w-5xl mx-auto flex flex-col h-full space-y-8 animate-in fade-in slide-in-from-bottom-2">
+                        {/* Note Input Section */}
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                                    <StickyNote className="mr-2 text-indigo-600" size={20}/> Internal Log Entry
+                                </h3>
+                                <div className="flex space-x-2">
+                                    {(['General', 'Counselling', 'FollowUp', 'Warning', 'Financial'] as NoteType[]).map(type => {
+                                        const styles = getNoteTypeStyles(type);
+                                        return (
+                                            <button 
+                                                key={type}
+                                                onClick={() => setNewNoteType(type)}
+                                                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center space-x-1 ${
+                                                    newNoteType === type 
+                                                    ? `${styles.bg} ${styles.text} ring-2 ring-indigo-500/20` 
+                                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {styles.icon}
+                                                <span>{type}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                             
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Age</label><input type="number" className="w-full p-3 border border-slate-200 rounded-lg" value={editFormData.age} onChange={e => setEditFormData({...editFormData, age: Number(e.target.value)})} /></div>
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Gap (Yrs)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-lg" value={editFormData.educationGap} onChange={e => setEditFormData({...editFormData, educationGap: Number(e.target.value)})} /></div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Work Exp (Yrs)</label><input type="number" className="w-full p-3 border border-slate-200 rounded-lg" value={editFormData.workExperience} onChange={e => setEditFormData({...editFormData, workExperience: Number(e.target.value)})} /></div>
-                                    <div className="flex items-center pt-6"><input type="checkbox" className="w-5 h-5 text-indigo-600 rounded mr-2" checked={editFormData.previousRefusals} onChange={e => setEditFormData({...editFormData, previousRefusals: e.target.checked})} /><label className="text-sm font-medium text-slate-700">Previous Refusals?</label></div>
+                            <div className="relative">
+                                <textarea 
+                                    className="w-full p-6 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all text-slate-700 min-h-[120px] placeholder:text-slate-400 text-sm leading-relaxed"
+                                    placeholder={`Type your ${newNoteType.toLowerCase()} note here...`}
+                                    value={newNoteText}
+                                    onChange={e => setNewNoteText(e.target.value)}
+                                />
+                                <div className="absolute bottom-4 right-4">
+                                    <button 
+                                        disabled={!newNoteText.trim()}
+                                        onClick={handleAddNote}
+                                        className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center"
+                                    >
+                                        <Send size={16} className="mr-2"/> Post Note
+                                    </button>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* AI Analysis Result */}
-                            {editFormData.riskAnalysis && (
-                                <div className="mt-6 p-5 bg-gradient-to-br from-indigo-50 to-slate-50 border border-indigo-100 rounded-xl animate-in fade-in slide-in-from-top-2">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h4 className="text-sm font-bold text-indigo-900 flex items-center"><Activity size={14} className="mr-2"/> AI Risk Report</h4>
-                                        <span className="text-[10px] text-slate-400">{new Date(editFormData.riskAnalysis.date).toLocaleDateString()}</span>
-                                    </div>
-                                    <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed border-t border-indigo-100 pt-3">
-                                        {editFormData.riskAnalysis.result}
-                                    </p>
+                        {/* Filter & Search */}
+                        <div className="flex justify-between items-center px-2">
+                            <div className="flex space-x-2 overflow-x-auto pb-1">
+                                {(['All', 'General', 'Counselling', 'FollowUp', 'Warning', 'Financial'] as const).map(f => (
+                                    <button 
+                                        key={f} 
+                                        onClick={() => setNoteFilter(f)}
+                                        className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
+                                            noteFilter === f 
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
+                                            : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'
+                                        }`}
+                                    >
+                                        {f}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Note Timeline */}
+                        <div className="relative pl-8 space-y-6">
+                            <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-slate-200"></div>
+                            
+                            {(selectedStudent.noteEntries || [])
+                                .filter(n => noteFilter === 'All' || n.type === noteFilter)
+                                .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0) || b.timestamp - a.timestamp)
+                                .map(note => {
+                                    const styles = getNoteTypeStyles(note.type);
+                                    return (
+                                        <div key={note.id} className={`relative group animate-in slide-in-from-left-4 duration-300 ${note.isPinned ? 'z-10' : ''}`}>
+                                            {/* Timeline Node */}
+                                            <div className={`absolute -left-[25px] top-4 w-4 h-4 rounded-full border-2 border-white shadow-sm ring-4 ring-slate-50 ${note.isPinned ? 'bg-amber-400' : 'bg-slate-300'}`}></div>
+                                            
+                                            <div className={`p-6 rounded-3xl shadow-sm border transition-all ${
+                                                note.isPinned 
+                                                ? 'bg-amber-50 border-amber-200 shadow-amber-100 ring-2 ring-amber-500/10' 
+                                                : 'bg-white border-slate-100 hover:border-indigo-200'
+                                            }`}>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase flex items-center space-x-1 ${styles.bg} ${styles.text}`}>
+                                                            {styles.icon}
+                                                            <span>{note.type}</span>
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">• By {note.createdBy}</span>
+                                                        <span className="text-[10px] font-medium text-slate-300">• {new Date(note.timestamp).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                        <button 
+                                                            onClick={() => togglePinNote(note.id)}
+                                                            className={`p-2 rounded-lg transition-colors ${note.isPinned ? 'text-amber-500 bg-amber-100' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                                                            title={note.isPinned ? "Unpin" : "Pin Note"}
+                                                        >
+                                                            <Pin size={16} fill={note.isPinned ? "currentColor" : "none"}/>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => deleteNote(note.id)}
+                                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete Entry"
+                                                        >
+                                                            <Trash2 size={16}/>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                                    {note.text}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                            {!(selectedStudent.noteEntries || []).length && (
+                                <div className="py-20 text-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200">
+                                    <Info size={48} className="mx-auto mb-4 opacity-20"/>
+                                    <p className="font-bold">No entries in timeline yet.</p>
+                                    <p className="text-xs">Notes are private to consultants and will not be seen by students.</p>
                                 </div>
                             )}
                         </div>
-
-                        <div className="mt-6"><button onClick={handleSaveProfile} className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg text-sm uppercase tracking-wide">Save All Changes</button></div>
                     </div>
-                )}
+                 )}
+             </div>
+          </div>
+      )}
 
-                {activeTab === 'notes' && (
-                    <div className="max-w-4xl mx-auto h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4 flex-1 flex flex-col min-h-[400px]">
-                            <textarea className="w-full flex-1 bg-transparent border-none outline-none resize-none text-sm text-slate-700 leading-relaxed" placeholder="Enter session notes here..." value={selectedStudent.notes} onChange={(e) => updateStudent({...selectedStudent, notes: e.target.value})} />
-                        </div>
-                    </div>
-                )}
-            </div>
-          </>
-        ) : null}
-      </div>
-      
-      {/* Modals */}
+      {/* CREATE INVOICE MODAL */}
+      {isCreatingInvoice && selectedStudent && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-md overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+                  <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+                      <div>
+                          <h3 className="font-bold text-xl text-slate-800 flex items-center">
+                              <DollarSign size={22} className="mr-3 text-indigo-600"/> Generate Invoice
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium mt-1">Applicant: {selectedStudent.name}</p>
+                      </div>
+                      <button onClick={() => setIsCreatingInvoice(false)} className="text-slate-400 hover:text-slate-900 bg-white p-2 rounded-xl shadow-sm border border-slate-100 transition-all active:scale-90"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="p-8 space-y-6">
+                      <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 flex flex-col items-center">
+                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Payable Amount ({currencySymbol})</label>
+                          <div className="relative w-full">
+                              <input 
+                                  type="number"
+                                  autoFocus
+                                  className="w-full bg-transparent text-4xl font-black text-indigo-700 text-center outline-none"
+                                  placeholder="0.00"
+                                  value={newInvoiceAmount}
+                                  onChange={e => setNewInvoiceAmount(e.target.value)}
+                              />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Service Description</label>
+                          <select 
+                              className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold text-slate-700"
+                              value={newInvoiceDesc}
+                              onChange={e => setNewInvoiceDesc(e.target.value)}
+                          >
+                              <option value="Consultation Fee">Consultation Fee</option>
+                              <option value="Service Fee">Service Fee</option>
+                              <option value="Visa Processing Fee">Visa Processing Fee</option>
+                              <option value="Language Test Training">Language Test Training</option>
+                              <option value="Mock Test Fee">Mock Test Fee</option>
+                              <option value="Courier/Admin Charges">Courier/Admin Charges</option>
+                              <option value="Other / Misc">Other / Misc</option>
+                          </select>
+                      </div>
+                      
+                      {newInvoiceDesc === 'Other / Misc' && (
+                          <input 
+                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white text-sm" 
+                            placeholder="Specify other service..." 
+                            onChange={e => setNewInvoiceDesc(e.target.value)}
+                          />
+                      )}
+                  </div>
+
+                  <div className="p-8 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
+                      <button onClick={() => setIsCreatingInvoice(false)} className="px-6 py-3 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-all text-sm">Discard</button>
+                      <button 
+                        onClick={handleCreateInvoice} 
+                        disabled={isSaving || !newInvoiceAmount}
+                        className="bg-slate-900 text-white px-10 py-3 rounded-2xl font-bold shadow-xl hover:bg-indigo-600 transition-all active:scale-95 text-sm flex items-center disabled:opacity-50"
+                      >
+                          {isSaving ? <Loader2 size={18} className="animate-spin mr-2"/> : <Receipt size={18} className="mr-2"/>}
+                          Finalize Invoice
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* DETAILED ADD STUDENT MODAL */}
       {isAdding && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div>
-                    <h3 className="font-bold text-xl text-slate-900">Add New Student</h3>
-                    <p className="text-sm text-slate-500">Create a comprehensive student profile</p>
-                </div>
-                <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-full transition-colors">
-                    <X size={24}/>
-                </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-8">
-                {/* AI Scan Section */}
-                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-8 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                        <div className="bg-indigo-600 text-white p-3 rounded-lg">
-                            <ScanFace size={24} />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-indigo-900">AI Passport Autofill</h4>
-                            <p className="text-xs text-indigo-700">Upload a passport image to instantly fill details.</p>
-                        </div>
-                    </div>
-                    <label className="bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg font-bold text-sm cursor-pointer hover:bg-indigo-50 transition-colors flex items-center shadow-sm">
-                        {scanningPassport ? <Loader2 className="animate-spin mr-2"/> : <UploadCloud className="mr-2"/>}
-                        {scanningPassport ? 'Scanning...' : 'Upload Passport'}
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handlePassportScan(e, false)} disabled={scanningPassport} />
-                    </label>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left Column: Personal Info */}
-                    <div className="space-y-6">
-                        <h4 className="font-bold text-slate-800 flex items-center text-sm uppercase tracking-wide border-b border-slate-100 pb-2">
-                            <User className="mr-2 text-slate-400" size={16}/> Personal Information
-                        </h4>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name <span className="text-red-500">*</span></label>
-                                <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="e.g. Ram Sharma" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone <span className="text-red-500">*</span></label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="98XXXXXXXX" value={newStudentPhone} onChange={e => setNewStudentPhone(e.target.value)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-[2.5rem] w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-white/20 animate-in zoom-in-95 duration-200">
+                  <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
+                      <div>
+                          <h3 className="text-2xl font-bold text-slate-800 flex items-center">
+                             <UserCheck className="mr-2 text-indigo-600" size={24}/> New Applicant Intake
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium">Build a detailed profile for professional counseling.</p>
+                      </div>
+                      <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+                      {/* AI & Branch Assignment */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <section>
+                            <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 h-full flex flex-col justify-center">
+                                <div className="flex items-center space-x-4 mb-4">
+                                    <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100"><ScanFace size={24}/></div>
+                                    <div>
+                                        <p className="text-base font-bold text-slate-800">Quick AI Passport Scan</p>
+                                        <p className="text-xs text-slate-500 font-medium">Auto-populate identity details instantly.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date of Birth</label>
-                                    <input type="date" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-slate-600" value={newStudentDOB} onChange={e => { setNewStudentDOB(e.target.value); setNewStudentAge(calculateAge(e.target.value).toString()); }} />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Gender</label>
-                                    <select 
-                                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none bg-white" 
-                                        value={newStudentGender} 
-                                        onChange={e => setNewStudentGender(e.target.value as any)}
-                                    >
-                                        <option value="Male">Male</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nationality</label>
-                                    <input 
-                                        className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" 
-                                        placeholder="e.g. Nepali" 
-                                        value={newStudentNationality} 
-                                        onChange={e => setNewStudentNationality(e.target.value)} 
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
-                                <input type="email" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="student@example.com" value={newStudentEmail} onChange={e => setNewStudentEmail(e.target.value)} />
-                            </div>
-
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Passport Number</label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="Passport No." value={newStudentPassport} onChange={e => setNewStudentPassport(e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Address</label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="City, District" value={newStudentAddress} onChange={e => setNewStudentAddress(e.target.value)} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column: Academic & Application */}
-                    <div className="space-y-6">
-                        <h4 className="font-bold text-slate-800 flex items-center text-sm uppercase tracking-wide border-b border-slate-100 pb-2">
-                            <GraduationCap className="mr-2 text-slate-400" size={16}/> Academic & Application
-                        </h4>
-
-                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Country</label>
-                                    <select className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none bg-white" value={newStudentCountry} onChange={e => setNewStudentCountry(e.target.value as Country)}>
-                                        {Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Lead Source</label>
-                                    <select className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none bg-white" value={newStudentSource} onChange={e => setNewStudentSource(e.target.value)}>
-                                        {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Test Type</label>
-                                    <select className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none bg-white" value={newStudentTestType} onChange={e => setNewStudentTestType(e.target.value)}>
-                                        <option value="IELTS">IELTS</option>
-                                        <option value="PTE">PTE</option>
-                                        <option value="TOEFL">TOEFL</option>
-                                        <option value="None">None</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Test Score</label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="Score/Band" value={newStudentTestScore} onChange={e => setNewStudentTestScore(e.target.value)} />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">GPA</label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="3.6" value={newStudentGpa} onChange={e => setNewStudentGpa(e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Gap (Yrs)</label>
-                                    <input type="number" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="0" value={newStudentGap} onChange={e => setNewStudentGap(e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Work (Yrs)</label>
-                                    <input type="number" className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="0" value={newStudentWorkExp} onChange={e => setNewStudentWorkExp(e.target.value)} />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="flex items-center space-x-2 p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" className="w-5 h-5 text-indigo-600 rounded" checked={newStudentRefusals} onChange={e => setNewStudentRefusals(e.target.checked)} />
-                                    <span className="text-sm font-medium text-slate-700">Student has previous visa refusals?</span>
+                                <label className={`flex items-center justify-center space-x-2 px-6 py-4 rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md w-full ${scanningPassport ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-900 text-white hover:bg-indigo-600 shadow-slate-200'}`}>
+                                    {scanningPassport ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+                                    <span>{scanningPassport ? 'Analyzing Image...' : 'Upload Passport Image'}</span>
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleScanPassport} disabled={scanningPassport} />
                                 </label>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        </section>
 
-            {/* Footer */}
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                <button onClick={() => setIsAdding(false)} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-colors">
-                    Cancel
-                </button>
-                <button onClick={handleAddStudent} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center">
-                    <Plus size={18} className="mr-2" /> Create Student Profile
-                </button>
-            </div>
-        </div>
-    </div>
-)}
+                        <section className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                            <div className="flex items-center space-x-2">
+                                <Network size={20} className="text-indigo-600" />
+                                <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">Office Assignment *</h4>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Branch / Location</label>
+                                <select 
+                                    className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold"
+                                    value={newStudentData.branchId}
+                                    onChange={e => setNewStudentData({...newStudentData, branchId: e.target.value})}
+                                >
+                                    {(settings?.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            </div>
+                        </section>
+                      </div>
 
-      {showBundleModal && bundleReady && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                  <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800 flex items-center"><Package className="mr-2 text-indigo-600"/> Bundle Ready</h3>
-                      <button onClick={() => setShowBundleModal(false)}><X size={20}/></button>
+                      {/* Section: Basic Identity */}
+                      <section className="space-y-6">
+                          <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><User size={16} className="mr-2"/> Identity & Contact</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Full Name *</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.name} onChange={e => setNewStudentData({...newStudentData, name: e.target.value})} placeholder="e.g. Ram Prasad Sharma" />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email Address</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.email} onChange={e => setNewStudentData({...newStudentData, email: e.target.value})} placeholder="ram@example.com" />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Phone Number</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.phone} onChange={e => setNewStudentData({...newStudentData, phone: e.target.value})} placeholder="+977 98XXXXXXXX" />
+                              </div>
+                          </div>
+                      </section>
+
+                      {/* Section: Intake Timeline & Tuition */}
+                      <section className="space-y-6">
+                          <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><Clock size={16} className="mr-2"/> Intake & Financials</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Intended Intake *</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.intakeMonth} onChange={e => setNewStudentData({...newStudentData, intakeMonth: e.target.value})}>
+                                      <option value="January">January</option><option value="February">February</option><option value="March">March</option><option value="April">April</option><option value="May">May</option><option value="June">June</option><option value="July">July</option><option value="August">August</option><option value="September">September</option><option value="October">October</option><option value="November">November</option><option value="December">December</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Intake Year *</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.intakeYear} onChange={e => setNewStudentData({...newStudentData, intakeYear: e.target.value})}>
+                                      <option value="2025">2025</option><option value="2026">2026</option><option value="2027">2027</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1 md:col-span-2">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Est. Annual Tuition ({currencySymbol}) *</label>
+                                  <div className="relative">
+                                      <Bank className="absolute left-4 top-4 text-slate-300" size={18} />
+                                      <input type="number" className="w-full pl-12 pr-4 py-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-black text-indigo-600" value={newStudentData.annualTuition} onChange={e => setNewStudentData({...newStudentData, annualTuition: parseFloat(e.target.value) || 0})} />
+                                  </div>
+                              </div>
+                          </div>
+                      </section>
+
+                      {/* Section: Academic Background */}
+                      <section className="space-y-6">
+                          <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><AcademicIcon size={16} className="mr-2"/> Academic & English</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Highest Level *</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.highestQualification} onChange={e => setNewStudentData({...newStudentData, highestQualification: e.target.value})}>
+                                      <option value="Undergraduate (+2)">Undergraduate (+2)</option>
+                                      <option value="Bachelors Degree">Bachelors Degree</option>
+                                      <option value="Masters Degree">Masters Degree</option>
+                                      <option value="PhD / Doctorate">PhD / Doctorate</option>
+                                      <option value="Diploma / Trade">Diploma / Trade</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Last GPA / Score</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.gpa} onChange={e => setNewStudentData({...newStudentData, gpa: e.target.value})} placeholder="e.g. 3.4 or 75%" />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">English Test</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.testType} onChange={e => setNewStudentData({...newStudentData, testType: e.target.value as any})}>
+                                      <option value="None">None / PTE Academic</option>
+                                      <option value="IELTS">IELTS</option>
+                                      <option value="PTE">PTE</option>
+                                      <option value="TOEFL">TOEFL</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Current Score</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.testScore} onChange={e => setNewStudentData({...newStudentData, testScore: e.target.value})} placeholder="e.g. 7.0 or 65" />
+                              </div>
+                          </div>
+                      </section>
+
+                      {/* Section: Passport & Target */}
+                      <section className="space-y-6">
+                          <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><Globe size={16} className="mr-2"/> Passport & Target</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Passport Number</label>
+                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-mono uppercase" value={newStudentData.passportNumber} onChange={e => setNewStudentData({...newStudentData, passportNumber: e.target.value})} placeholder="X0000000" />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Desired Country</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.targetCountry} onChange={e => setNewStudentData({...newStudentData, targetCountry: e.target.value as Country})}>
+                                      {Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Lead Source</label>
+                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.source} onChange={e => setNewStudentData({...newStudentData, source: e.target.value})}>
+                                      <option value="Walk-in">Walk-in</option>
+                                      <option value="Referral">Referral</option>
+                                      <option value="Facebook Ads">Facebook Ads</option>
+                                      <option value="Instagram">Instagram</option>
+                                      <option value="Website">Website Form</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </section>
                   </div>
-                  <div className="p-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <button onClick={downloadBundle} className="flex flex-col items-center justify-center p-4 border-2 border-indigo-100 rounded-xl hover:bg-indigo-50"><Download size={32} className="text-indigo-600 mb-2"/><span className="font-bold text-slate-800 text-sm">Download ZIP</span></button>
-                          <button onClick={copySecureLink} className="flex flex-col items-center justify-center p-4 border-2 border-slate-100 rounded-xl hover:bg-slate-50"><Share2 size={32} className="text-slate-600 mb-2"/><span className="font-bold text-slate-800 text-sm">Copy Link</span></button>
+
+                  <div className="p-8 border-t bg-slate-50/50 flex justify-between items-center">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Confidential applicant intake data entry</p>
+                      <div className="flex gap-3">
+                          <button onClick={() => setIsAdding(false)} className="px-8 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-all text-sm">Discard</button>
+                          <button onClick={handleAddStudent} className="bg-indigo-600 text-white px-12 py-3.5 rounded-2xl font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all active:scale-95 text-sm flex items-center">
+                              <Save size={18} className="mr-2"/> Finalize Enrollment
+                          </button>
                       </div>
                   </div>
               </div>

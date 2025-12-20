@@ -1,7 +1,5 @@
-
-
-import { Student, ApplicationStatus, Task } from '../types';
-import { fetchTasks, saveTasks } from './storageService';
+import { Student, ApplicationStatus, Task, Invoice } from '../types';
+import { fetchTasks, saveTasks, fetchInvoices, saveInvoices } from './storageService';
 import { logActivity } from './auditService';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -32,40 +30,51 @@ export const runStatusAutomation = async (student: Student, newStatus: Applicati
     // --- WORKFLOW RULES ---
 
     if (newStatus === ApplicationStatus.Applied) {
-        // Rule: Follow up in 1 week
         createTask(`Check Offer Status: ${student.name} (${student.targetCountry})`, 'Low', 7, '11:00');
     }
 
     else if (newStatus === ApplicationStatus.OfferReceived) {
-        // Rule: Immediate Financial Processing
         createTask(`Collect Tuition Fee & GTE Docs: ${student.name}`, 'High', 1, '14:00');
-        // Rule: NOC Check
         if ((student.targetCountry as string) !== 'India') {
             createTask(`Verify NOC Status for ${student.name}`, 'Medium', 2, '12:00');
         }
     }
 
     else if (newStatus === ApplicationStatus.VisaGranted) {
-        // Rule: Critical Pre-Departure
         createTask(`Conduct Pre-Departure Briefing: ${student.name}`, 'High', 1, '15:00');
-        // Rule: Revenue Operations
-        createTask(` CLAIM COMMISSION: ${student.name} (${student.targetCountry})`, 'High', 3, '10:00');
         createTask(`Archive Student File: ${student.name}`, 'Low', 5, '17:00');
-    }
 
-    else if (newStatus === ApplicationStatus.VisaRejected) {
-        // Rule: Refund Processing
-        createTask(`Process Tuition Refund: ${student.name}`, 'High', 1, '11:00');
-        createTask(`Review Refusal Reason with ${student.name}`, 'Medium', 2, '14:00');
+        // --- STUDENT SUCCESS FEE INVOICE ---
+        try {
+            const existingInvoices = await fetchInvoices();
+            const hasSuccessInvoice = existingInvoices.some(i => 
+                i.studentId === student.id && i.description.includes('Visa Success')
+            );
+
+            if (!hasSuccessInvoice) {
+                const autoInvoice: Invoice = {
+                    id: Date.now().toString() + '_auto',
+                    invoiceNumber: `INV-SUCCESS-${Math.floor(1000 + Math.random() * 9000)}`,
+                    studentId: student.id,
+                    studentName: student.name,
+                    amount: 20000, 
+                    description: `Visa Success Fee - ${student.targetCountry}`,
+                    status: 'Pending',
+                    date: Date.now(),
+                    branchId: student.branchId || 'main'
+                };
+                await saveInvoices([autoInvoice, ...existingInvoices]);
+                logActivity('CREATE', 'Invoice', `Auto-generated Visa Success Invoice for ${student.name}`);
+            }
+        } catch (e) {
+            console.error("Student invoice automation failed", e);
+        }
     }
 
     if (newTasks.length > 0) {
         const updatedTasks = [...newTasks, ...existingTasks];
         await saveTasks(updatedTasks);
-        
-        // Log the automation
         logActivity('CREATE', 'Settings', `Workflow Engine created ${newTasks.length} tasks for ${student.name}`);
-        
         return newTasks.length;
     }
     

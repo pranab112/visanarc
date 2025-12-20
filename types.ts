@@ -1,5 +1,4 @@
 
-
 export enum Country {
   USA = 'USA',
   Australia = 'Australia',
@@ -14,7 +13,8 @@ export enum ApplicationStatus {
   Applied = 'Applied',
   OfferReceived = 'Offer Received',
   VisaGranted = 'Visa Granted',
-  VisaRejected = 'Visa Rejected'
+  VisaRejected = 'Visa Rejected',
+  Alumni = 'Alumni'
 }
 
 export enum NocStatus {
@@ -23,6 +23,14 @@ export enum NocStatus {
   VoucherReceived = 'Voucher Received',
   Verified = 'Verified',
   Issued = 'Issued'
+}
+
+export interface NocMetadata {
+    appliedDate?: number;
+    voucherNumber?: string;
+    nocNumber?: string;
+    approvedDate?: number;
+    notes?: string;
 }
 
 export interface DocumentItem {
@@ -49,6 +57,47 @@ export interface StoredFile {
     uploadedBy: string;
 }
 
+export interface Branch {
+    id: string;
+    name: string;
+    location: string;
+}
+
+export interface AcademicRecord {
+    level: string; // e.g., "10th", "12th", "Bachelors"
+    institution: string;
+    board: string;
+    passedYear: string;
+    score: string;
+}
+
+export interface TestScoreBreakdown {
+    listening: string;
+    reading: string;
+    writing: string;
+    speaking: string;
+    overall: string;
+    date?: number; 
+}
+
+export interface SponsorRecord {
+    name: string;
+    relationship: string;
+    occupation: string;
+    annualIncome: string;
+}
+
+export type NoteType = 'General' | 'Counselling' | 'FollowUp' | 'Warning' | 'Financial';
+
+export interface NoteEntry {
+    id: string;
+    text: string;
+    type: NoteType;
+    timestamp: number;
+    createdBy: string;
+    isPinned?: boolean;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -57,36 +106,57 @@ export interface Student {
   targetCountry: Country;
   status: ApplicationStatus;
   nocStatus: NocStatus;
-  documents: Record<string, DocumentStatus>; // Changed from boolean to detailed status
-  documentFiles?: Record<string, StoredFile>; // Changed from string to full file object
-  documentDependencies?: Record<string, string[]>; // map docName to list of prerequisite docNames
-  notes: string;
+  nocDetails?: NocMetadata;
+  documents: Record<string, DocumentStatus>; 
+  documentFiles?: Record<string, StoredFile>; 
+  documentDependencies?: Record<string, string[]>; 
+  notes: string; 
+  noteEntries?: NoteEntry[];
   createdAt: number;
-  blockedBy?: string[]; // IDs of students this student depends on
+  blockedBy?: string[]; 
   
+  // Branching
+  branchId?: string;
+
+  // Intake Timeline
+  intakeMonth?: string;
+  intakeYear?: string;
+
   // Client Portal Credentials
   portalPassword?: string; 
   messages?: ChatMessage[];
 
-  // Identity & Passport Data (New for OCR)
+  // Identity & Passport Data
   passportNumber?: string;
-  dateOfBirth?: string; // YYYY-MM-DD
+  dateOfBirth?: string; 
   nationality?: string;
   address?: string;
   gender?: 'Male' | 'Female' | 'Other';
+  ocrConfidence?: number;
 
-  // Academic & Financial Info
-  testType?: 'IELTS' | 'PTE' | 'TOEFL' | 'None';
-  testScore?: string; // Real/Actual Score
-  targetScore?: string; // New: Target Score
+  // Academic History
+  highestQualification?: string;
+  academics?: AcademicRecord[];
+  educationHistory?: string;
   gpa?: string;
-  financialCap?: 'Low' | 'Medium' | 'Satisfactory';
+
+  // English Proficiency
+  testType?: 'IELTS' | 'PTE' | 'TOEFL' | 'None';
+  testScoreBreakdown?: TestScoreBreakdown;
+  testScore?: string;
+  targetScore?: string;
+
+  // Financial & Risk
+  sponsors?: SponsorRecord[];
+  financialCap?: 'Low' | 'Medium' | 'Satisfactory' | 'High';
+  annualTuition?: number; 
 
   // Risk Assessment Data
   age?: number;
-  educationGap?: number; // Years
-  workExperience?: number; // Years
+  educationGap?: number; 
+  workExperience?: number; 
   previousRefusals?: boolean;
+  borderDetails?: string;
   
   // AI Analysis Result
   riskAnalysis?: {
@@ -97,40 +167,44 @@ export interface Student {
   // Test Prep Centre Info
   testPrep?: {
       enrolled: boolean;
-      batch?: 'Morning (7-8 AM)' | 'Day (12-1 PM)' | 'Evening (5-6 PM)';
+      batch?: string;
+      studyMode?: 'Physical' | 'Online';
+      materialsIssued?: boolean;
+      instructorName?: string;
+      enrollmentDate?: number;
       examDate?: number;
       bookingStatus?: 'Pending' | 'Booked' | 'Completed';
-      // New Fields for Exam Management
       portalUsername?: string;
       portalPassword?: string;
       examVenue?: string;
       examFeeStatus?: 'Paid' | 'Unpaid';
-      mockScores?: {
-          listening: string;
-          reading: string;
-          writing: string;
-          speaking: string;
-          overall: string;
-      };
-      // Attendance Tracking: 'YYYY-MM-DD' -> Status
+      feeStatus?: 'Paid' | 'Unpaid' | 'Partial';
+      mockScores?: TestScoreBreakdown; 
+      mockTestHistory?: TestScoreBreakdown[]; 
       attendance?: Record<string, 'Present' | 'Absent' | 'Late'>;
   };
   
-  source?: string; // e.g., 'Web Form', 'Manual', 'Referral'
-  referralPartnerId?: string; // Link to a Partner (B2B Agent/Aggregator)
-  courseInterest?: string;
-  educationHistory?: string;
+  source?: string;
+  
+  // Partner Tracking
+  referralPartnerId?: string; 
+  assignedPartnerId?: string; 
+  assignedPartnerName?: string; 
+  commissionAmount?: number; 
+  commissionStatus?: 'Pending' | 'Claimed' | 'Received'; 
+  
+  courseInterest?: string; 
+  courseInterests?: string[];
 }
 
 export interface Partner {
   id: string;
   name: string;
   type: 'University' | 'Aggregator' | 'College' | 'Consultancy' | 'B2B Agent';
-  commissionRate: number; // Percentage
+  commissionRate: number; 
   portalUrl: string;
 }
 
-// B2B COMMISSION CLAIM TRACKING
 export interface CommissionClaim {
     id: string;
     studentId: string;
@@ -154,6 +228,7 @@ export interface Invoice {
   description: string;
   status: 'Pending' | 'Paid';
   date: number;
+  branchId?: string;
 }
 
 export type ExpenseCategory = 'Rent' | 'Salaries' | 'Marketing' | 'Utilities' | 'Software' | 'Office' | 'Travel' | 'Other';
@@ -165,6 +240,7 @@ export interface Expense {
   description: string;
   date: number;
   recordedBy: string;
+  branchId?: string;
 }
 
 export interface PRPointsCriteria {
@@ -182,9 +258,9 @@ export interface Task {
   text: string;
   completed: boolean;
   priority: 'High' | 'Medium' | 'Low';
-  dueTime: string; // e.g. "14:00"
+  dueTime: string; 
   createdAt: number;
-  day: string; // Day of the week
+  day: string; 
 }
 
 export type SubscriptionPlan = 'Free' | 'Pro' | 'Enterprise';
@@ -222,9 +298,9 @@ export interface AgencySettings {
     whatsappUpdate: string;
   };
   leadForm?: LeadFormConfig;
+  testPrepBatches?: string[]; 
+  branches?: Branch[]; 
 }
-
-// --- AUTH & MULTI-TENANCY TYPES ---
 
 export type UserRole = 'Owner' | 'Counsellor' | 'Viewer' | 'Student';
 
@@ -233,8 +309,9 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  agencyId: string; // The tenant ID
+  agencyId: string; 
   avatarUrl?: string;
+  branchId?: string; 
 }
 
 export interface AuthSession {
@@ -242,7 +319,6 @@ export interface AuthSession {
   token: string;
 }
 
-// --- AUDIT LOGS ---
 export interface ActivityLog {
     id: string;
     userId: string;
@@ -251,4 +327,10 @@ export interface ActivityLog {
     entityType: 'Student' | 'Invoice' | 'Settings' | 'File' | 'Auth' | 'Commission' | 'Expense';
     details: string;
     timestamp: number;
+    changes?: Record<string, ChangeRecord>; 
+}
+
+export interface ChangeRecord {
+    old: any;
+    new: any;
 }

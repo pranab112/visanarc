@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X } from 'lucide-react';
 import { fetchSettings } from '../services/storageService';
@@ -47,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'ai-tools', label: 'AI Tools Suite', icon: BrainCircuit, locked: isFree, roles: ['Owner', 'Counsellor'] },
     { id: 'test-prep', label: 'Test Prep Hub', icon: BookOpen, roles: ['Owner', 'Counsellor', 'Viewer'] },
     { id: 'partners', label: 'Partners', icon: Users, roles: ['Owner', 'Counsellor'] },
-    { id: 'analytics', label: 'Revenue & Stats', icon: PieChart, roles: ['Owner'] },
+    { id: 'analytics', label: 'Executive Dashboard', icon: PieChart, roles: ['Owner'] },
     { id: 'activity', label: 'Audit Trail', icon: Activity, roles: ['Owner'] },
   ];
 
@@ -82,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
             </h1>
             <div className="flex items-center mt-1">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                    plan === 'Pro' ? 'bg-indigo-500 text-white' : 
+                    plan === 'Pro' ? 'bg-indigo-50 text-white' : 
                     plan === 'Enterprise' ? 'bg-purple-500 text-white' : 
                     'bg-slate-700 text-slate-300'
                 }`}>
@@ -106,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
          </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isLocked = item.locked;
@@ -144,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
                 activeTab === 'settings' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
         >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             <span className="font-medium text-sm">Settings</span>
         </button>
 
@@ -157,10 +158,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
         
         <div className="mt-4 text-center border-t border-slate-800 pt-3">
-            <span className="text-[10px] text-slate-600 font-mono block">v2.9-X2</span>
+            <span className="text-[10px] text-slate-600 font-mono block">v3.0-I2-STABLE</span>
             <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Property of SMM84.</span>
         </div>
-      </div>
+    </div>
     </div>
     </>
   );

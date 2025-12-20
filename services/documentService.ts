@@ -1,5 +1,41 @@
+import { Invoice, AgencySettings, Student, Country } from '../types';
+import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS, DocRequirement } from '../constants';
 
-import { Invoice, AgencySettings } from '../types';
+/**
+ * Auto-selects and calculates the required documents based on student profile.
+ */
+export const getRequiredDocuments = (student: Student): (DocRequirement & { isCountrySpecific: boolean })[] => {
+    const country = student.targetCountry;
+    
+    // 1. Universal Documents
+    const base = UNIVERSAL_DOCS.map(d => ({ ...d, isCountrySpecific: false }));
+    
+    // 2. Country Specific Documents
+    const countrySpecific = (COUNTRY_SPECIFIC_DOCS[country] || []).map(d => ({ ...d, isCountrySpecific: true }));
+    
+    const allDocs = [...base, ...countrySpecific];
+
+    // 3. Conditional Requirements based on Profile Data
+    if ((student.educationGap || 0) > 0) {
+        allDocs.push({ 
+            name: 'Work Experience / Gap Evidence', 
+            category: 'Academics', 
+            isCountrySpecific: false, 
+            condition: 'Required for Education Gap > 0' 
+        });
+    }
+    
+    if (student.previousRefusals) {
+        allDocs.push({ 
+            name: 'Previous Visa Refusal Letters', 
+            category: 'Visa', 
+            isCountrySpecific: false, 
+            condition: 'Required for Prior Refusals' 
+        });
+    }
+
+    return allDocs;
+};
 
 export const generateReceipt = (invoice: Invoice, settings: AgencySettings | null) => {
     const currency = settings?.currency || 'NPR';

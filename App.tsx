@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { StudentManager } from './components/crm/StudentManager';
@@ -48,7 +47,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Operations />;
+        return <Operations onTabChange={setActiveTab} />;
       case 'students':
         return <StudentManager />;
       case 'ai-tools':
@@ -66,7 +65,7 @@ export default function App() {
       case 'public-form':
         return <PublicLeadForm onClose={user ? () => setActiveTab('settings') : undefined} />;
       default:
-        return <Operations />;
+        return <Operations onTabChange={setActiveTab} />;
     }
   };
 

@@ -1,5 +1,4 @@
-
-
+// @google/genai coding guidelines followed: Using GoogleGenAI with named apiKey parameter, correct model selection for complex tasks, and property-based text extraction.
 import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -17,10 +16,12 @@ export const generateSop = async (
     Structure: Introduction, Academic Background, Why this Course, Why this University, Why this Country, Career Goals, Conclusion.
     Keep it under 600 words.`;
 
+    // Using gemini-3-flash-preview for basic text generation task.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
+    // response.text is a property, not a method.
     return response.text || "Failed to generate SOP.";
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -46,8 +47,9 @@ export const analyzeVisaRisk = async (
     
     Be realistic and strict based on current immigration trends for ${country}.`;
 
+    // Upgraded to gemini-3-pro-preview for complex reasoning and analysis task.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
     });
     return response.text || "Failed to analyze risk.";
@@ -60,8 +62,9 @@ export const analyzeVisaRisk = async (
 export const getInterviewQuestion = async (context: string): Promise<string> => {
     try {
         const prompt = `You are a strict visa officer for ${context}. Ask me one difficult interview question regarding my study plan or finances. Only return the question text.`;
+        // Using gemini-3-flash-preview for simple prompt generation task.
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           contents: prompt,
         });
         return response.text || "Why do you want to study here?";
@@ -103,8 +106,9 @@ export const recommendUniversities = async (
 
     Return a list of 4 best-fit universities.`;
 
+    // Upgraded to gemini-3-pro-preview for complex matching and structured JSON output.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -119,6 +123,7 @@ export const recommendUniversities = async (
               acceptanceChance: { type: Type.STRING, enum: ["High", "Medium", "Low"], description: "Probability of acceptance based on stats" },
               reason: { type: Type.STRING, description: "Short reason why this is a good match" }
             },
+            propertyOrdering: ["name", "location", "tuition", "acceptanceChance", "reason"],
             required: ["name", "location", "tuition", "acceptanceChance", "reason"]
           }
         }
@@ -135,7 +140,7 @@ export const recommendUniversities = async (
   }
 };
 
-// --- NEW OCR FEATURE ---
+// --- OCR FEATURE ---
 
 export interface PassportData {
   name: string;
@@ -144,6 +149,7 @@ export interface PassportData {
   nationality: string;
   address: string;
   gender: 'Male' | 'Female' | 'Other';
+  confidenceScore: number;
 }
 
 export const extractPassportData = async (base64Image: string, mimeType: string): Promise<PassportData | null> => {
@@ -153,13 +159,15 @@ export const extractPassportData = async (base64Image: string, mimeType: string)
     2. Passport Number
     3. Date of Birth (format YYYY-MM-DD)
     4. Nationality
-    5. Address
+    5. Address (if available, else empty)
     6. Gender (Male, Female, or Other)
+    7. Overall confidenceScore (float from 0.0 to 1.0 representing certainty of extraction)
 
-    If a field is not visible, return empty string.`;
+    Return the result as a strictly valid JSON object.`;
 
+    // Upgraded to gemini-3-pro-preview for multimodal structural extraction task (OCR).
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: {
         parts: [
           {
@@ -181,9 +189,11 @@ export const extractPassportData = async (base64Image: string, mimeType: string)
             dateOfBirth: { type: Type.STRING },
             nationality: { type: Type.STRING },
             address: { type: Type.STRING },
-            gender: { type: Type.STRING, enum: ["Male", "Female", "Other"] }
+            gender: { type: Type.STRING, enum: ["Male", "Female", "Other"] },
+            confidenceScore: { type: Type.NUMBER }
           },
-          required: ["name", "passportNumber"]
+          propertyOrdering: ["name", "passportNumber", "dateOfBirth", "nationality", "address", "gender", "confidenceScore"],
+          required: ["name", "passportNumber", "confidenceScore"]
         }
       }
     });

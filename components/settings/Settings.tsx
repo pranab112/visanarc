@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap } from 'lucide-react';
-import { AgencySettings, Country, SubscriptionPlan } from '../../types';
+import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X } from 'lucide-react';
+import { AgencySettings, Country, SubscriptionPlan, Branch } from '../../types';
 import { fetchSettings, saveSettings, fetchAllData, clearAllData, importData } from '../../services/storageService';
 import { LeadFormBuilder } from './LeadFormBuilder';
 
@@ -9,7 +10,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
-    const [activeTab, setActiveTab] = useState<'general' | 'lead-form'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'lead-form' | 'branches'>('general');
     const [settings, setSettings] = useState<AgencySettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -19,6 +20,10 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
     // Payment Modal State
     const [showUpgradeModal, setShowUpgradeModal] = useState<SubscriptionPlan | null>(null);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+    // Branch Form
+    const [newBranchName, setNewBranchName] = useState('');
+    const [newBranchLoc, setNewBranchLoc] = useState('');
 
     useEffect(() => {
         const load = async () => {
@@ -38,6 +43,37 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         window.location.reload(); // Reload to reflect changes globally
+    };
+
+    const handleAddBranch = async () => {
+        if(!newBranchName || !settings) return;
+        const newBranch: Branch = {
+            id: 'br_' + Date.now(),
+            name: newBranchName,
+            location: newBranchLoc || newBranchName
+        };
+        const updated = {
+            ...settings,
+            branches: [...(settings.branches || []), newBranch]
+        };
+        setSettings(updated);
+        await saveSettings(updated);
+        setNewBranchName('');
+        setNewBranchLoc('');
+    };
+
+    const handleDeleteBranch = async (id: string) => {
+        if(!settings || !window.confirm("Delete this branch?")) return;
+        if(id === 'main') {
+            alert("Cannot delete Head Office.");
+            return;
+        }
+        const updated = {
+            ...settings,
+            branches: (settings.branches || []).filter(b => b.id !== id)
+        };
+        setSettings(updated);
+        await saveSettings(updated);
     };
 
     const handleExport = async () => {
@@ -185,6 +221,14 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                          {activeTab === 'general' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
                      </button>
                      <button 
+                        onClick={() => setActiveTab('branches')}
+                        className={`pb-4 px-2 font-medium text-sm transition-colors relative flex items-center ${activeTab === 'branches' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+                     >
+                         <Network size={16} className="mr-2"/>
+                         Branch Management
+                         {activeTab === 'branches' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
+                     </button>
+                     <button 
                         onClick={() => setActiveTab('lead-form')}
                         className={`pb-4 px-2 font-medium text-sm transition-colors relative flex items-center ${activeTab === 'lead-form' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
                      >
@@ -196,6 +240,53 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
                 {activeTab === 'lead-form' ? (
                     <LeadFormBuilder onPreview={() => onOpenPublicForm && onOpenPublicForm()} />
+                ) : activeTab === 'branches' ? (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+                            <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center border-b border-slate-100 pb-4">
+                                <Network className="mr-2 text-indigo-600" size={20}/> Enterprise Branch Management
+                            </h2>
+                            <p className="text-sm text-slate-500 mb-6">Create multiple branches to track performance, students, and financials separately. The Head Office can view data from all branches.</p>
+                            
+                            <div className="flex gap-4 items-end mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Branch Name</label>
+                                    <input className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white" placeholder="e.g. Chitwan Branch" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Location</label>
+                                    <input className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white" placeholder="e.g. Bharatpur-10" value={newBranchLoc} onChange={e => setNewBranchLoc(e.target.value)} />
+                                </div>
+                                <button onClick={handleAddBranch} disabled={!newBranchName} className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center">
+                                    <Plus size={16} className="mr-2"/> Add Branch
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                {(settings.branches || []).map(branch => (
+                                    <div key={branch.id} className="flex justify-between items-center p-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors bg-white">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                                                <Building size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-800 text-sm">{branch.name}</h4>
+                                                <p className="text-xs text-slate-500">{branch.location} • ID: {branch.id}</p>
+                                            </div>
+                                        </div>
+                                        {branch.id !== 'main' && (
+                                            <button onClick={() => handleDeleteBranch(branch.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
+                                        {branch.id === 'main' && (
+                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">Head Office</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
@@ -331,7 +422,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
                             <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 text-center">
                                 <p className="font-bold text-slate-600">StudyAbroad Genius</p>
-                                <p>Version 2.9-X (Stable Preview)</p>
+                                <p>Version 3.0-I2 (Restore Point)</p>
                                 <p className="mt-1">Licensed to: {settings.agencyName}</p>
                             </div>
                         </div>
@@ -341,7 +432,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
             {/* Payment Modal */}
             {showUpgradeModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-slate-100">
                             <h3 className="font-bold text-xl text-slate-900">Upgrade to {showUpgradeModal}</h3>

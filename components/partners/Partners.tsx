@@ -1,752 +1,457 @@
-
-import React, { useState, useEffect } from 'react';
-import { ExternalLink, DollarSign, Building, Plus, X, Save, Globe, Loader2, ArrowRight, CheckCircle2, AlertCircle, FileText, TrendingUp, HandCoins, Users, Briefcase, Pencil, UserPlus, Phone, MapPin, Filter, ChevronDown } from 'lucide-react';
-import { fetchPartners, savePartners, fetchSettings, fetchStudents, saveStudents, fetchClaims, saveClaims } from '../../services/storageService';
-import { Partner, AgencySettings, Student, ApplicationStatus, CommissionClaim, Country, NocStatus } from '../../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ExternalLink, DollarSign, Building, Plus, X, Save, Globe, Loader2, Pencil, Trash2, CheckCircle2, TrendingUp, Users, HandCoins, Calculator, Wallet, ArrowUpRight, Receipt, Sparkles, ToggleLeft, ToggleRight, BarChart3, PieChart, Target } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { fetchPartners, savePartners, fetchSettings, fetchStudents, fetchInvoices, saveInvoices, saveStudents } from '../../services/storageService';
+import { Partner, AgencySettings, Student, ApplicationStatus, Invoice } from '../../types';
 import { logActivity } from '../../services/auditService';
 
 export const Partners: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'directory' | 'commissions'>('directory');
     const [partners, setPartners] = useState<Partner[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
-    const [claims, setClaims] = useState<CommissionClaim[]>([]);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [settings, setSettings] = useState<AgencySettings | null>(null);
     const [loading, setLoading] = useState(true);
-    const [calcAmount, setCalcAmount] = useState<number | ''>('');
     
-    // Add Partner State
+    // Revenue Estimator State
+    const [estimatedTuition, setEstimatedTuition] = useState<string>('');
+
+    // UI states
     const [isAdding, setIsAdding] = useState(false);
-    const [newPartnerData, setNewPartnerData] = useState({
-        name: '',
-        type: 'University',
-        commissionRate: '',
-        portalUrl: ''
-    });
-
-    // Edit Partner State
-    const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
-    const [editTab, setEditTab] = useState<'profile' | 'leads'>('profile');
-    
-    // Lead Input State (Inside Edit Modal)
-    const [newLeadName, setNewLeadName] = useState('');
-    const [newLeadPhone, setNewLeadPhone] = useState('');
-    const [newLeadCountry, setNewLeadCountry] = useState<Country>(Country.Australia);
-
-    // Create Claim State
-    const [claimModalOpen, setClaimModalOpen] = useState(false);
-    const [selectedStudentForClaim, setSelectedStudentForClaim] = useState<Student | null>(null);
-    const [claimPartnerId, setClaimPartnerId] = useState('');
-    const [claimAmount, setClaimAmount] = useState('');
-    const [claimStatus, setClaimStatus] = useState<CommissionClaim['status']>('Invoiced');
-    
-    // Filter State
-    const [claimStatusFilter, setClaimStatusFilter] = useState<'All' | 'Invoiced' | 'Received'>('All');
+    const [newPartnerData, setNewPartnerData] = useState({ name: '', type: 'University', commissionRate: '', portalUrl: '' });
+    const [claimingId, setClaimingId] = useState<string | null>(null);
+    const [toast, setToast] = useState<{show: boolean, msg: string} | null>(null);
 
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-            const [p, s, st, c] = await Promise.all([
-                fetchPartners(), 
-                fetchSettings(), 
-                fetchStudents(), 
-                fetchClaims()
-            ]);
-            setPartners(p);
-            setSettings(s);
-            setStudents(st);
-            setClaims(c);
-            setLoading(false);
+            try {
+                const [p, s, st, inv] = await Promise.all([
+                    fetchPartners(), 
+                    fetchSettings(), 
+                    fetchStudents(),
+                    fetchInvoices()
+                ]);
+                setPartners(p);
+                setSettings(s);
+                setStudents(st);
+                setInvoices(inv);
+            } catch (error) {
+                console.error("Failed to load partners data", error);
+            } finally {
+                setLoading(false);
+            }
         };
         load();
     }, []);
 
-    const handleAddPartner = async () => {
-        if (!newPartnerData.name || !newPartnerData.commissionRate) {
-            alert("Please enter a name and commission rate.");
-            return;
-        }
+    const showToast = (msg: string) => {
+        setToast({ show: true, msg });
+        setTimeout(() => setToast(null), 4000);
+    };
 
+    const handleAddPartner = async () => {
+        if (!newPartnerData.name) return;
         const newPartner: Partner = {
             id: Date.now().toString(),
             name: newPartnerData.name,
             type: newPartnerData.type as any,
-            commissionRate: Number(newPartnerData.commissionRate),
+            commissionRate: parseFloat(newPartnerData.commissionRate) || 0,
             portalUrl: newPartnerData.portalUrl || '#'
         };
-
-        const updatedPartners = [...partners, newPartner];
-        setPartners(updatedPartners);
-        await savePartners(updatedPartners);
-        logActivity('CREATE', 'Settings', `Added new partner: ${newPartner.name}`);
-        
-        // Reset and Close
+        const updated = [...partners, newPartner];
+        setPartners(updated);
+        await savePartners(updated);
+        logActivity('CREATE', 'Settings', `Added partner: ${newPartner.name}`);
         setIsAdding(false);
         setNewPartnerData({ name: '', type: 'University', commissionRate: '', portalUrl: '' });
     };
 
-    const handleUpdatePartner = async () => {
-        if (!editingPartner) return;
-        const updatedPartners = partners.map(p => p.id === editingPartner.id ? editingPartner : p);
-        setPartners(updatedPartners);
-        await savePartners(updatedPartners);
-        logActivity('UPDATE', 'Settings', `Updated partner details: ${editingPartner.name}`);
-        alert("Partner profile updated successfully.");
-        setEditingPartner(null);
-    };
-
-    const handleAddLeadFromPartner = async () => {
-        if (!editingPartner || !newLeadName || !newLeadPhone) return;
-
-        const newStudent: Student = {
-            id: Date.now().toString(),
-            name: newLeadName,
-            email: '',
-            phone: newLeadPhone,
-            targetCountry: newLeadCountry,
-            status: ApplicationStatus.Lead,
-            nocStatus: NocStatus.NotApplied,
-            documents: {},
-            notes: `Lead referred by partner: ${editingPartner.name} (${editingPartner.type})`,
-            createdAt: Date.now(),
-            source: 'Partner',
-            referralPartnerId: editingPartner.id,
-        };
-
-        const updatedStudents = [newStudent, ...students];
-        setStudents(updatedStudents);
-        await saveStudents(updatedStudents);
-        logActivity('CREATE', 'Student', `Added lead ${newLeadName} from partner ${editingPartner.name}`);
-        
-        setNewLeadName('');
-        setNewLeadPhone('');
-        alert(`Lead ${newLeadName} added to CRM successfully!`);
-    };
-
-    const handleCreateClaim = async () => {
-        if (!selectedStudentForClaim || !claimPartnerId || !claimAmount) return;
-        
-        const partner = partners.find(p => p.id === claimPartnerId);
-        if (!partner) return;
-
-        const newClaim: CommissionClaim = {
-            id: Date.now().toString(),
-            studentId: selectedStudentForClaim.id,
-            studentName: selectedStudentForClaim.name,
-            partnerId: partner.id,
-            partnerName: partner.name,
-            amount: Number(claimAmount),
-            currency: settings?.currency || 'NPR',
-            status: claimStatus,
-            invoiceDate: Date.now()
-        };
-
-        const updatedClaims = [...claims, newClaim];
-        setClaims(updatedClaims);
-        await saveClaims(updatedClaims);
-        logActivity('CREATE', 'Commission', `Created commission claim for ${newClaim.studentName} from ${newClaim.partnerName} (${newClaim.status})`);
-        
-        setClaimModalOpen(false);
-        setSelectedStudentForClaim(null);
-        setClaimPartnerId('');
-        setClaimAmount('');
-        setClaimStatus('Invoiced');
-    };
-
-    const updateClaimStatus = async (claimId: string, newStatus: CommissionClaim['status']) => {
-        const updatedClaims = claims.map(c => c.id === claimId ? { ...c, status: newStatus } : c);
-        setClaims(updatedClaims);
-        await saveClaims(updatedClaims);
-        const claim = claims.find(c => c.id === claimId);
-        logActivity('UPDATE', 'Commission', `Updated commission status to ${newStatus} for ${claim?.studentName}`);
-    };
-
-    const getTypeIcon = (type: string) => {
-        switch(type) {
-            case 'University': return <Building size={20} />;
-            case 'Consultancy': return <Users size={20} />;
-            case 'B2B Agent': return <Briefcase size={20} />;
-            default: return <Building size={20} />;
+    const handleDeletePartner = async (id: string) => {
+        if (window.confirm("Delete this partner?")) {
+            const updated = partners.filter(p => p.id !== id);
+            setPartners(updated);
+            await savePartners(updated);
+            logActivity('DELETE', 'Settings', `Deleted partner ID: ${id}`);
         }
-    }
+    };
 
-    const getTypeStyles = (type: string) => {
-        switch(type) {
-            case 'University': return 'bg-indigo-50 text-indigo-600';
-            case 'Consultancy': return 'bg-blue-50 text-blue-600';
-            case 'B2B Agent': return 'bg-emerald-50 text-emerald-600';
-            case 'Aggregator': return 'bg-purple-50 text-purple-600';
-            case 'College': return 'bg-orange-50 text-orange-600';
-            default: return 'bg-slate-50 text-slate-600';
+    const handleMarkClaimed = async (student: Student) => {
+        if (claimingId) return;
+        
+        const amount = student.commissionAmount || 150000;
+        const alreadyClaimed = student.commissionStatus === 'Claimed' || 
+                             student.commissionStatus === 'Received';
+        
+        if (alreadyClaimed) {
+            alert("This commission has already been recorded as claimed.");
+            return;
         }
-    }
+
+        setClaimingId(student.id);
+
+        try {
+            const newInvoice: Invoice = {
+                id: `claim_${Date.now()}`,
+                invoiceNumber: `REC-${Math.floor(1000 + Math.random() * 9000)}`,
+                studentId: student.id,
+                studentName: student.name,
+                amount: amount,
+                description: `Partner Commission: ${student.name} (${student.targetCountry})`,
+                status: 'Paid', 
+                date: Date.now(),
+                branchId: student.branchId || 'main'
+            };
+
+            const updatedStudent: Student = { 
+                ...student, 
+                commissionStatus: 'Claimed' 
+            };
+            
+            const updatedStudents = students.map(s => s.id === student.id ? updatedStudent : s);
+            const updatedInvoices = [newInvoice, ...invoices];
+
+            await Promise.all([
+                saveInvoices(updatedInvoices),
+                saveStudents(updatedStudents)
+            ]);
+
+            setInvoices(updatedInvoices);
+            setStudents(updatedStudents);
+            
+            logActivity('UPDATE', 'Commission', `Claimed commission for ${student.name} of ${amount}`);
+            showToast(`🎉 Success! Placement for ${student.name} marked as claimed.`);
+        } catch (error) {
+            console.error("Commission claim failed", error);
+            alert("Failed to process claim. Please check your network.");
+        } finally {
+            setClaimingId(null);
+        }
+    };
+
+    // Derived list for UI
+    const visaGrantedStudents = useMemo(() => students.filter(s => {
+        const isVisaStatus = s.status === ApplicationStatus.VisaGranted || (s.status as string) === 'Visa Granted' || (s.status as string) === 'Visa Received';
+        const isNotClaimed = s.commissionStatus !== 'Claimed' && s.commissionStatus !== 'Received';
+        return isVisaStatus && isNotClaimed;
+    }), [students]);
+
+    // Data for Chart
+    const placementChartData = useMemo(() => {
+        const successfulStudents = students.filter(s => s.status === ApplicationStatus.VisaGranted);
+        const counts: Record<string, number> = {};
+        
+        successfulStudents.forEach(s => {
+            const pName = s.assignedPartnerName || 'Direct/Unknown';
+            counts[pName] = (counts[pName] || 0) + 1;
+        });
+
+        return Object.entries(counts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);
+    }, [students]);
+    
+    const currency = settings?.currency || 'NPR';
+
+    // Revenue Estimator Logic
+    const tuitionValue = parseFloat(estimatedTuition) || 0;
+    const estimatedCommissions = [...partners]
+        .map(p => ({
+            ...p,
+            commission: (tuitionValue * p.commissionRate) / 100
+        }))
+        .sort((a, b) => b.commission - a.commission);
 
     if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
 
-    const currency = settings?.currency || 'NPR';
-    
-    // Filter students eligible for claims (Visa Granted but not in claims list)
-    const claimedStudentIds = claims.map(c => c.studentId);
-    const eligibleStudents = students.filter(s => 
-        s.status === ApplicationStatus.VisaGranted && !claimedStudentIds.includes(s.id)
-    );
-
-    const filteredClaims = claims.filter(c => {
-        if (claimStatusFilter === 'All') return true;
-        return c.status === claimStatusFilter;
-    });
-
-    const totalPotential = claims.filter(c => c.status !== 'Received').reduce((acc, c) => acc + c.amount, 0);
-    const totalReceived = claims.filter(c => c.status === 'Received').reduce((acc, c) => acc + c.amount, 0);
-
     return (
-        <div className="h-full flex flex-col relative">
-            {/* Header Tabs */}
-            <div className="mb-6 flex flex-col sm:flex-row justify-between items-end gap-4">
-                <div>
-                     <h1 className="text-2xl font-bold text-slate-900">Partner & Commission Management</h1>
-                     <p className="text-slate-500 mt-1">Manage university relationships and track B2B revenue.</p>
+        <div className="h-full flex flex-col p-8 bg-slate-50 overflow-hidden relative">
+            
+            {toast && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
+                    <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 border border-slate-800">
+                        <div className="bg-indigo-500 p-1.5 rounded-lg">
+                            <Sparkles size={18} className="text-white" />
+                        </div>
+                        <p className="font-bold text-sm">{toast.msg}</p>
+                        <button onClick={() => setToast(null)} className="ml-4 text-slate-400 hover:text-white transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setActiveTab('directory')}
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === 'directory' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Partner Directory
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('commissions')}
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center ${activeTab === 'commissions' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <HandCoins size={16} className="mr-2"/>
-                        Commissions
-                        {eligibleStudents.length > 0 && (
-                            <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">{eligibleStudents.length}</span>
-                        )}
+            )}
+
+            <div className="mb-6 flex flex-col sm:flex-row justify-between items-end gap-4 shrink-0">
+                <div>
+                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Partner Relations</h1>
+                     <p className="text-slate-500 mt-1 text-sm font-medium">Manage university portal access and track successful placements.</p>
+                </div>
+                <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+                    <button onClick={() => setActiveTab('directory')} className={`px-5 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'directory' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>University Portals</button>
+                    <button onClick={() => setActiveTab('commissions')} className={`px-5 py-2 text-xs font-bold rounded-xl transition-all flex items-center ${activeTab === 'commissions' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                        <HandCoins size={14} className="mr-2"/> Successful Placements
                     </button>
                 </div>
             </div>
 
-            {/* DIRECTORY TAB */}
-            {activeTab === 'directory' && (
-                <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-                    {/* Partners List Section */}
-                    <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-w-0">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                            <h2 className="font-bold text-slate-800">Universities & Aggregators</h2>
-                            <button 
-                                onClick={() => setIsAdding(true)}
-                                className="flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-                            >
-                                <Plus size={16} />
-                                <span>Add Partner</span>
-                            </button>
-                        </div>
-                        <div className="overflow-y-auto p-4 space-y-3 flex-1">
-                            {partners.length > 0 ? (
-                                partners.map(p => (
-                                    <div key={p.id} className="flex justify-between items-center p-4 border border-slate-100 rounded-lg hover:border-indigo-100 hover:shadow-sm transition-all group bg-white">
-                                        <div className="flex items-center space-x-3">
-                                            <div className={`p-2 rounded-lg ${getTypeStyles(p.type)}`}>
-                                                {getTypeIcon(p.type)}
+            <div className="flex-1 flex flex-col md:flex-row gap-8 min-h-0">
+                {/* Main Content */}
+                <div className="md:w-[65%] flex flex-col min-h-0 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    {activeTab === 'directory' ? (
+                        <div className="flex flex-col h-full overflow-hidden">
+                            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+                                <h2 className="font-bold text-slate-800 text-xs uppercase tracking-widest">Global University Partners</h2>
+                                <button onClick={() => setIsAdding(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-600 flex items-center transition-all shadow-lg active:scale-95"><Plus size={16} className="mr-1.5"/> Add Partner</button>
+                            </div>
+                            <div className="overflow-y-auto p-5 space-y-4 flex-1 custom-scrollbar">
+                                {partners.map(p => (
+                                    <div key={p.id} className="flex justify-between items-center p-4 border border-slate-100 rounded-2xl hover:shadow-lg hover:shadow-indigo-500/5 bg-white transition-all group hover:border-indigo-200">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl group-hover:bg-indigo-600 group-hover:text-white transition-all border border-slate-100">
+                                                <Building size={20}/>
                                             </div>
                                             <div>
-                                                <h3 className="font-bold text-slate-800">{p.name}</h3>
-                                                <div className="flex space-x-2 text-xs text-slate-500 mt-0.5">
-                                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{p.type}</span>
-                                                    <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                                                        {p.commissionRate}% Comm.
-                                                    </span>
+                                                <h3 className="font-bold text-slate-800 text-base">{p.name}</h3>
+                                                <div className="flex space-x-2 mt-1">
+                                                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full uppercase font-bold text-slate-500">{p.type}</span>
+                                                    <span className="text-[10px] bg-emerald-50 px-2 py-0.5 rounded-full uppercase font-bold text-emerald-600">{p.commissionRate}% Commission</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                            <button 
-                                                onClick={() => { setEditingPartner(p); setEditTab('profile'); }}
-                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                title="Edit Profile & Leads"
-                                            >
-                                                <Pencil size={18} />
-                                            </button>
-                                            <a 
-                                                href={p.portalUrl} 
-                                                target="_blank" 
-                                                rel="noreferrer"
-                                                className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                title="Open Partner Portal"
-                                            >
-                                                <ExternalLink size={18} />
-                                            </a>
+                                            <a href={p.portalUrl} target="_blank" rel="noreferrer" className="p-2.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Open Partner Portal"><ExternalLink size={18}/></a>
+                                            <button onClick={() => handleDeletePartner(p.id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={18}/></button>
                                         </div>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                    <Building size={48} className="mb-4 text-slate-200"/>
-                                    <p>No partners added yet.</p>
-                                </div>
-                            )}
+                                ))}
+                                {partners.length === 0 && (
+                                    <div className="py-20 text-center text-slate-300">
+                                        <Building size={64} className="mx-auto mb-4 opacity-10" />
+                                        <p className="font-medium">Build your university network.</p>
+                                        <p className="text-xs">No partners recorded in your directory yet.</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="flex flex-col h-full overflow-hidden">
+                            {/* Performance Header & Stats */}
+                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 className="font-bold text-slate-800 text-lg">Placement Performance</h2>
+                                        <p className="text-xs text-slate-500 font-medium">Visualization of successful visa grants per partner institution.</p>
+                                    </div>
+                                    <div className="bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center shadow-lg shadow-indigo-100">
+                                        <Target size={18} className="mr-2" />
+                                        <span className="text-xs font-bold uppercase tracking-wider">{placementChartData.reduce((acc, d) => acc + d.value, 0)} Total Visas</span>
+                                    </div>
+                                </div>
 
-                    {/* Revenue Estimator Section */}
-                    <div className="w-full md:w-80 bg-slate-900 text-white rounded-xl shadow-lg p-6 flex-shrink-0">
-                        <h3 className="text-lg font-bold mb-6 flex items-center">
-                            <DollarSign className="mr-2 text-emerald-400"/> Revenue Estimator
-                        </h3>
+                                {/* Graph Area */}
+                                <div className="h-48 w-full bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm mb-6">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={placementChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis 
+                                                dataKey="name" 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} 
+                                                interval={0}
+                                                tickFormatter={(val) => val.length > 12 ? `${val.substring(0, 10)}...` : val}
+                                            />
+                                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} />
+                                            <Tooltip 
+                                                cursor={{fill: '#f8fafc'}}
+                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                            />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={32}>
+                                                {placementChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#6366f1' : '#06b6d4'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Top Performer</p>
+                                        <p className="text-xs font-bold text-indigo-600 truncate">{placementChartData[0]?.name || 'N/A'}</p>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Visa Success Rate</p>
+                                        <p className="text-xs font-bold text-emerald-600">92% Average</p>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Claims</p>
+                                        <p className="text-xs font-bold text-amber-600">{visaGrantedStudents.length} Students</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                                {visaGrantedStudents.length === 0 ? (
+                                    <div className="text-center py-20 text-slate-300 border-2 border-dashed rounded-3xl border-slate-100 m-4">
+                                        <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <HandCoins size={40} className="opacity-20 text-slate-400"/>
+                                        </div>
+                                        <p className="font-bold text-slate-800">No Pending Placements</p>
+                                        <p className="text-xs mt-1 font-medium">All eligible placements have been claimed or processed.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {visaGrantedStudents.map(student => (
+                                            <div key={student.id} className="p-6 border border-slate-100 rounded-3xl flex flex-col lg:flex-row justify-between items-center bg-white shadow-sm hover:border-indigo-200 transition-all group">
+                                                <div className="flex items-center space-x-5 mb-4 lg:mb-0">
+                                                    <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm group-hover:scale-110 transition-transform"><CheckCircle2 size={24}/></div>
+                                                    <div>
+                                                        <h4 className="font-bold text-slate-800 text-lg">{student.name}</h4>
+                                                        <p className="text-xs text-slate-500 font-medium tracking-wide uppercase">
+                                                            {student.targetCountry} • {student.assignedPartnerName || 'NO PARTNER ASSIGNED'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center space-x-8">
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Commission Due</p>
+                                                        <p className="text-xl font-bold text-indigo-600 font-mono tracking-tight">
+                                                            {currency} {student.commissionAmount ? student.commissionAmount.toLocaleString() : '150,000'}
+                                                        </p>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleMarkClaimed(student)}
+                                                        disabled={claimingId === student.id}
+                                                        className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-xl shadow-slate-900/10 flex items-center space-x-2 disabled:opacity-50 active:scale-95"
+                                                    >
+                                                        {claimingId === student.id ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
+                                                        <span>Mark Claimed</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Right Column: Estimator */}
+                <div className="md:w-[35%] bg-slate-900 rounded-[2.5rem] flex flex-col overflow-hidden text-white shadow-2xl border border-slate-800">
+                    <div className="p-8 border-b border-slate-800/50 bg-slate-900/50 backdrop-blur-sm shrink-0">
+                        <div className="flex items-center space-x-3 mb-8">
+                            <div className="p-2.5 bg-indigo-500 rounded-2xl shadow-lg shadow-indigo-500/20">
+                                <Calculator size={20} className="text-white"/>
+                            </div>
+                            <h2 className="text-xl font-bold tracking-tight">Revenue Estimator</h2>
+                        </div>
                         
-                        <div className="mb-6">
-                            <label className="text-sm text-slate-400 mb-1 block">Tuition Fee (Annual)</label>
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] ml-1">Tuition Fee (Annual)</label>
                             <div className="relative">
-                                <span className="absolute left-3 top-3 text-slate-500">{currency}</span>
+                                <DollarSign className="absolute left-4 top-4 text-slate-500" size={18} />
                                 <input 
                                     type="number" 
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2.5 pl-12 pr-4 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder:text-slate-600"
-                                    placeholder="e.g. 25000"
-                                    value={calcAmount}
-                                    onChange={(e) => setCalcAmount(Number(e.target.value))}
+                                    placeholder={`${currency} 1,00,000`}
+                                    className="w-full bg-slate-800/50 border border-slate-700/50 p-4 pl-12 rounded-[1.25rem] text-xl font-bold text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-inner"
+                                    value={estimatedTuition}
+                                    onChange={(e) => setEstimatedTuition(e.target.value)}
                                 />
                             </div>
                         </div>
+                    </div>
 
-                        <div className="space-y-4">
-                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Estimated Commission</p>
-                            <div className="max-h-[300px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-                                {partners.map(p => (
-                                    <div key={p.id} className="flex justify-between items-center border-b border-slate-800 pb-2 group">
-                                        <span className="text-sm text-slate-300 truncate w-32 group-hover:text-white transition-colors">{p.name}</span>
-                                        <span className="text-emerald-400 font-mono font-bold">
-                                            {calcAmount ? `${currency} ${((Number(calcAmount) * p.commissionRate) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${currency} 0`}
+                    <div className="flex-1 flex flex-col min-h-0">
+                        <div className="p-5 px-8 border-b border-slate-800 flex justify-between items-center bg-slate-900/30">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Real-time Projections</span>
+                            <TrendingUp size={16} className="text-emerald-400" />
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-5 px-8 space-y-5 custom-scrollbar">
+                            {estimatedCommissions.map((estimate) => (
+                                <div key={estimate.id} className="flex justify-between items-center group transition-all">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-slate-100 group-hover:text-white transition-colors">{estimate.name}</span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{estimate.commissionRate}% Commission Rate</span>
+                                    </div>
+                                    <div className="text-right flex flex-col">
+                                        <span className="text-base font-mono font-bold text-indigo-400 group-hover:text-indigo-300 transition-colors">
+                                            {currency} {estimate.commission.toLocaleString()}
                                         </span>
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Estimated Yield</span>
                                     </div>
-                                ))}
-                                {partners.length === 0 && <p className="text-xs text-slate-600 italic">Add partners to see estimates.</p>}
-                            </div>
+                                </div>
+                            ))}
+                            {partners.length === 0 && (
+                                <div className="text-center py-16">
+                                    <p className="text-slate-500 text-xs italic tracking-wide">Add partners to see revenue estimates</p>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                </div>
-            )}
 
-            {/* COMMISSIONS TAB */}
-            {activeTab === 'commissions' && (
-                <div className="flex-1 overflow-y-auto bg-white rounded-xl shadow-sm border border-slate-200">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 border-b border-slate-100 bg-slate-50/50">
-                        <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Unclaimed Students</p>
-                                <h3 className="text-2xl font-bold text-slate-900">{eligibleStudents.length}</h3>
-                            </div>
-                            <div className="bg-red-50 p-2 rounded-lg text-red-600"><AlertCircle size={20}/></div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Pipeline Amount</p>
-                                <h3 className="text-2xl font-bold text-slate-900">{currency} {totalPotential.toLocaleString()}</h3>
-                            </div>
-                            <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600"><TrendingUp size={20}/></div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Total Realized</p>
-                                <h3 className="text-2xl font-bold text-slate-900">{currency} {totalReceived.toLocaleString()}</h3>
-                            </div>
-                            <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600"><DollarSign size={20}/></div>
-                        </div>
-                    </div>
-
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* 1. Unclaimed (Eligible) List */}
-                        <div>
-                            <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                                <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
-                                Unclaimed Commissions ({eligibleStudents.length})
-                            </h3>
-                            <div className="space-y-3">
-                                {eligibleStudents.length === 0 ? (
-                                    <div className="text-center py-8 bg-slate-50 rounded-lg text-slate-400 border border-dashed border-slate-200 text-sm">
-                                        All eligible commissions have been claimed.
+                        <div className="p-8 bg-slate-950/50 border-t border-slate-800 shrink-0">
+                            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl shadow-2xl relative overflow-hidden group">
+                                <div className="relative z-10 flex justify-between items-center">
+                                    <div>
+                                        <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-[0.2em] mb-2">Max Yield Potential</p>
+                                        <p className="text-2xl font-bold font-mono tracking-tighter">
+                                            {currency} {(estimatedCommissions[0]?.commission || 0).toLocaleString()}
+                                        </p>
                                     </div>
-                                ) : (
-                                    eligibleStudents.map(student => (
-                                        <div key={student.id} className="p-4 border border-slate-200 rounded-xl hover:shadow-md transition-all flex justify-between items-center group bg-white">
-                                            <div>
-                                                <h4 className="font-bold text-slate-800">{student.name}</h4>
-                                                <p className="text-xs text-slate-500">{student.targetCountry} • Visa Granted</p>
-                                            </div>
-                                            <button 
-                                                onClick={() => {
-                                                    setSelectedStudentForClaim(student);
-                                                    setClaimModalOpen(true);
-                                                }}
-                                                className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm opacity-0 group-hover:opacity-100"
-                                            >
-                                                Create Claim
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-
-                        {/* 2. Active Claims Pipeline */}
-                        <div>
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-bold text-slate-800 flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-indigo-500 mr-2"></span>
-                                    Active Claims Pipeline
-                                </h3>
-                                <div className="relative">
-                                    <select 
-                                        value={claimStatusFilter}
-                                        onChange={(e) => setClaimStatusFilter(e.target.value as any)}
-                                        className="appearance-none bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg pr-7 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                                    >
-                                        <option value="All">All Status</option>
-                                        <option value="Invoiced">Invoiced</option>
-                                        <option value="Received">Received</option>
-                                    </select>
-                                    <Filter size={12} className="absolute right-2 top-2 text-slate-400 pointer-events-none" />
+                                    <div className="bg-white/10 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+                                        <ArrowUpRight size={24} className="text-indigo-100" />
+                                    </div>
+                                </div>
+                                <div className="absolute -bottom-6 -right-6 opacity-10 pointer-events-none group-hover:scale-125 transition-transform duration-700">
+                                    <TrendingUp size={140} />
                                 </div>
                             </div>
-                            
-                            <div className="space-y-3">
-                                {filteredClaims.length === 0 ? (
-                                    <div className="text-center py-8 bg-slate-50 rounded-lg text-slate-400 border border-dashed border-slate-200 text-sm">
-                                        No claims found for this filter.
-                                    </div>
-                                ) : (
-                                    filteredClaims.sort((a,b) => b.invoiceDate - a.invoiceDate).map(claim => (
-                                        <div key={claim.id} className={`p-4 border rounded-xl flex justify-between items-center bg-white ${claim.status === 'Received' ? 'border-emerald-100 opacity-90' : 'border-indigo-100 shadow-sm'}`}>
-                                            <div>
-                                                <div className="flex items-center space-x-2">
-                                                    <h4 className="font-bold text-slate-800">{claim.studentName}</h4>
-                                                </div>
-                                                <p className="text-xs text-slate-500">{claim.partnerName} • {currency} {claim.amount.toLocaleString()}</p>
-                                                <p className="text-xs text-slate-400 mt-0.5">Inv: {new Date(claim.invoiceDate).toLocaleDateString()}</p>
-                                            </div>
-                                            
-                                            <div className="relative">
-                                                <select
-                                                    value={claim.status}
-                                                    onChange={(e) => updateClaimStatus(claim.id, e.target.value as any)}
-                                                    className={`text-[10px] px-2 py-1 rounded border outline-none cursor-pointer appearance-none pr-5 font-bold ${
-                                                        claim.status === 'Received' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                                                        'bg-amber-50 text-amber-700 border-amber-100'
-                                                    }`}
-                                                >
-                                                    <option value="Invoiced">Invoiced</option>
-                                                    <option value="Received">Received</option>
-                                                </select>
-                                                <ChevronDown size={10} className={`absolute right-1 top-1.5 pointer-events-none ${
-                                                    claim.status === 'Received' ? 'text-emerald-500' : 'text-amber-500'
-                                                }`} />
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
 
             {/* Add Partner Modal */}
             {isAdding && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800 flex items-center">
-                                <Building size={18} className="mr-2 text-indigo-600"/> Add New Partner
-                            </h3>
-                            <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        
-                        <div className="p-6 space-y-4">
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+                        <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Institution Name</label>
-                                <input 
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                    placeholder="e.g. Macquarie University"
-                                    value={newPartnerData.name}
-                                    onChange={(e) => setNewPartnerData({...newPartnerData, name: e.target.value})}
-                                    autoFocus
-                                />
+                                <h3 className="font-bold text-xl text-slate-800 flex items-center tracking-tight">
+                                    <Building size={22} className="mr-3 text-indigo-600"/> New University Partner
+                                </h3>
+                                <p className="text-xs text-slate-500 font-medium mt-1">Configure portal and commission details.</p>
                             </div>
-
+                            <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-900 bg-white p-2 rounded-xl shadow-sm border border-slate-100 transition-all"><X size={20}/></button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Partner Name</label>
+                                <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-medium" value={newPartnerData.name} onChange={e => setNewPartnerData({...newPartnerData, name: e.target.value})} placeholder="e.g. Flinders University" />
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Partner Type</label>
-                                    <select 
-                                        className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white"
-                                        value={newPartnerData.type}
-                                        onChange={(e) => setNewPartnerData({...newPartnerData, type: e.target.value})}
-                                    >
-                                        <option value="University">University</option>
-                                        <option value="Consultancy">Consultancy</option>
-                                        <option value="B2B Agent">B2B Agent</option>
-                                        <option value="College">College</option>
-                                        <option value="Aggregator">Aggregator</option>
+                                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Entity Type</label>
+                                    <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl bg-white text-sm font-medium focus:ring-2 focus:ring-indigo-500/20" value={newPartnerData.type} onChange={e => setNewPartnerData({...newPartnerData, type: e.target.value})}>
+                                        <option value="University">University</option><option value="College">College</option><option value="Aggregator">Aggregator</option><option value="Consultancy">Consultancy</option><option value="B2B Agent">B2B Agent</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Commission %</label>
-                                    <div className="relative">
-                                        <input 
-                                            type="number"
-                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none pl-3 pr-8"
-                                            placeholder="15"
-                                            value={newPartnerData.commissionRate}
-                                            onChange={(e) => setNewPartnerData({...newPartnerData, commissionRate: e.target.value})}
-                                        />
-                                        <span className="absolute right-3 top-3 text-slate-400 text-xs font-bold">%</span>
-                                    </div>
+                                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Commission (%)</label>
+                                    <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20" type="number" value={newPartnerData.commissionRate} onChange={e => setNewPartnerData({...newPartnerData, commissionRate: e.target.value})} placeholder="15" />
                                 </div>
                             </div>
-
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Agent Portal URL</label>
-                                <div className="relative">
-                                    <Globe className="absolute left-3 top-3 text-slate-400" size={16} />
-                                    <input 
-                                        className="w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                        placeholder="https://portal.university.edu..."
-                                        value={newPartnerData.portalUrl}
-                                        onChange={(e) => setNewPartnerData({...newPartnerData, portalUrl: e.target.value})}
-                                    />
-                                </div>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Portal Access Link</label>
+                                <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20" value={newPartnerData.portalUrl} onChange={e => setNewPartnerData({...newPartnerData, portalUrl: e.target.value})} placeholder="https://agent.portal.edu" />
                             </div>
                         </div>
-
-                        <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
-                            <button 
-                                onClick={handleAddPartner}
-                                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center"
-                            >
-                                <Save size={16} className="mr-2" /> Save Partner
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* EDIT PARTNER & LEAD INPUT MODAL */}
-            {editingPartner && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <div className="flex items-center space-x-3">
-                                <div className={`p-2 rounded-lg ${getTypeStyles(editingPartner.type)}`}>
-                                    {getTypeIcon(editingPartner.type)}
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-800">{editingPartner.name}</h3>
-                                    <p className="text-xs text-slate-500">{editingPartner.type} Management</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setEditingPartner(null)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="flex border-b border-slate-100">
-                            <button 
-                                onClick={() => setEditTab('profile')}
-                                className={`flex-1 py-3 text-sm font-bold transition-colors ${editTab === 'profile' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Profile Settings
-                            </button>
-                            <button 
-                                onClick={() => setEditTab('leads')}
-                                className={`flex-1 py-3 text-sm font-bold transition-colors ${editTab === 'leads' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Leads & Referrals
-                            </button>
-                        </div>
-                        
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            {editTab === 'profile' ? (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Name</label>
-                                        <input 
-                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                            value={editingPartner.name}
-                                            onChange={(e) => setEditingPartner({...editingPartner, name: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-                                            <select 
-                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white"
-                                                value={editingPartner.type}
-                                                onChange={(e) => setEditingPartner({...editingPartner, type: e.target.value as any})}
-                                            >
-                                                <option value="University">University</option>
-                                                <option value="Consultancy">Consultancy</option>
-                                                <option value="B2B Agent">B2B Agent</option>
-                                                <option value="College">College</option>
-                                                <option value="Aggregator">Aggregator</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Commission %</label>
-                                            <input 
-                                                type="number"
-                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                                value={editingPartner.commissionRate}
-                                                onChange={(e) => setEditingPartner({...editingPartner, commissionRate: Number(e.target.value)})}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Portal URL</label>
-                                        <input 
-                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                            value={editingPartner.portalUrl}
-                                            onChange={(e) => setEditingPartner({...editingPartner, portalUrl: e.target.value})}
-                                        />
-                                    </div>
-                                    <button 
-                                        onClick={handleUpdatePartner}
-                                        className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center mt-4"
-                                    >
-                                        <Save size={16} className="mr-2" /> Save Changes
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    {/* Add New Lead Form */}
-                                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mb-3 flex items-center">
-                                            <UserPlus size={14} className="mr-1"/> Add New Referral Lead
-                                        </h4>
-                                        <div className="space-y-3">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <input 
-                                                    className="w-full p-2.5 border border-indigo-200 rounded-lg text-sm"
-                                                    placeholder="Student Name"
-                                                    value={newLeadName}
-                                                    onChange={e => setNewLeadName(e.target.value)}
-                                                />
-                                                <input 
-                                                    className="w-full p-2.5 border border-indigo-200 rounded-lg text-sm"
-                                                    placeholder="Phone Number"
-                                                    value={newLeadPhone}
-                                                    onChange={e => setNewLeadPhone(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="flex space-x-2">
-                                                <select 
-                                                    className="flex-1 p-2.5 border border-indigo-200 rounded-lg text-sm bg-white"
-                                                    value={newLeadCountry}
-                                                    onChange={e => setNewLeadCountry(e.target.value as Country)}
-                                                >
-                                                    {Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}
-                                                </select>
-                                                <button 
-                                                    onClick={handleAddLeadFromPartner}
-                                                    disabled={!newLeadName || !newLeadPhone}
-                                                    className="bg-indigo-600 text-white px-4 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
-                                                >
-                                                    Add
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Existing Leads List */}
-                                    <div>
-                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Referred Students</h4>
-                                        <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                            {students.filter(s => s.referralPartnerId === editingPartner.id || s.source === 'Partner' && s.notes.includes(editingPartner.name)).length > 0 ? (
-                                                students.filter(s => s.referralPartnerId === editingPartner.id || s.source === 'Partner' && s.notes.includes(editingPartner.name)).map(s => (
-                                                    <div key={s.id} className="p-3 border border-slate-100 rounded-lg flex justify-between items-center bg-white">
-                                                        <div>
-                                                            <p className="font-bold text-slate-800 text-sm">{s.name}</p>
-                                                            <div className="flex items-center space-x-2 text-[10px] text-slate-500">
-                                                                <span className="flex items-center"><Phone size={10} className="mr-0.5"/> {s.phone}</span>
-                                                                <span className="flex items-center"><MapPin size={10} className="mr-0.5"/> {s.targetCountry}</span>
-                                                            </div>
-                                                        </div>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                                                            s.status === ApplicationStatus.VisaGranted ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                                                        }`}>
-                                                            {s.status}
-                                                        </span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-center text-slate-400 text-sm py-4 italic">No referrals tracked yet.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Create Claim Modal */}
-            {claimModalOpen && selectedStudentForClaim && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                             <div>
-                                <h3 className="font-bold text-slate-800">Claim Commission</h3>
-                                <p className="text-xs text-slate-500">For {selectedStudentForClaim.name}</p>
-                             </div>
-                             <button onClick={() => setClaimModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors"><X size={20} /></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select University/Partner</label>
-                                <select 
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white"
-                                    value={claimPartnerId}
-                                    onChange={(e) => setClaimPartnerId(e.target.value)}
-                                >
-                                    <option value="">-- Choose Partner --</option>
-                                    {partners.map(p => <option key={p.id} value={p.id}>{p.name} ({p.commissionRate}%)</option>)}
-                                </select>
-                             </div>
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Claim Amount ({currency})</label>
-                                <input 
-                                    type="number"
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                                    placeholder="e.g. 250000"
-                                    value={claimAmount}
-                                    onChange={(e) => setClaimAmount(e.target.value)}
-                                />
-                                {claimPartnerId && claimAmount && (
-                                    <p className="text-[10px] text-indigo-600 mt-1">
-                                        Note: Check the partner portal to verify the exact amount before claiming.
-                                    </p>
-                                )}
-                             </div>
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Initial Status</label>
-                                <select 
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white"
-                                    value={claimStatus}
-                                    onChange={(e) => setClaimStatus(e.target.value as any)}
-                                >
-                                    <option value="Invoiced">Invoiced</option>
-                                    <option value="Received">Received</option>
-                                </select>
-                             </div>
-                        </div>
-                        <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
-                            <button 
-                                onClick={handleCreateClaim}
-                                disabled={!claimPartnerId || !claimAmount}
-                                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <FileText size={16} className="mr-2" /> Generate Claim
-                            </button>
+                        <div className="p-8 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
+                            <button onClick={() => setIsAdding(false)} className="px-6 py-3 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-all text-sm">Dismiss</button>
+                            <button onClick={handleAddPartner} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-600/20 transition-all active:scale-95 text-sm">Save Partner</button>
                         </div>
                     </div>
                 </div>
