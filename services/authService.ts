@@ -1,5 +1,7 @@
+
 import { User, AgencySettings, Country } from '../types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { saveSettings } from './storageService';
 
 let currentUserCache: User | null = null;
 
@@ -73,7 +75,14 @@ export const login = async (email: string, password: string): Promise<User | nul
     return null;
 };
 
-export const registerAgency = async (name: string, email: string, agencyName: string): Promise<User> => {
+export const registerAgency = async (name: string, email: string, agencyName: string, activationKey?: string): Promise<User> => {
+    // Determine Plan based on Key (Simulation)
+    const isProKey = activationKey === 'PRO-2025-GENIUS' || activationKey === 'SMM84-PRO';
+    const isEnterpriseKey = activationKey === 'ENT-GTSDEVS-84' || activationKey === 'SMM84-ADMIN';
+    
+    const plan = isEnterpriseKey ? 'Enterprise' : isProKey ? 'Pro' : 'Free';
+    const agencyId = `agency_${Date.now()}`;
+
     if (!isSupabaseConfigured) {
         // Allow local "registration" for testing
         const mockUser: User = {
@@ -81,24 +90,44 @@ export const registerAgency = async (name: string, email: string, agencyName: st
             name,
             email,
             role: 'Owner',
-            agencyId: `agency_${Date.now()}`
+            agencyId
         };
+        
+        // Initialize settings for the new agency
+        const defaultSettings: AgencySettings = {
+            agencyName: agencyName,
+            email: email,
+            phone: '',
+            address: '',
+            defaultCountry: Country.Australia,
+            currency: 'NPR',
+            notifications: { emailOnVisa: true, dailyReminders: true },
+            subscription: { 
+                plan: plan,
+                expiryDate: plan !== 'Free' ? Date.now() + (365 * 24 * 60 * 60 * 1000) : undefined
+            },
+            testPrepBatches: ['Morning (7-8 AM)', 'Day (12-1 PM)', 'Evening (5-6 PM)'],
+            branches: [{id: 'main', name: 'Head Office', location: 'Main'}]
+        };
+        
+        // We use a specific storage key for this new agency's settings
+        localStorage.setItem(`sag_settings_${agencyId}`, JSON.stringify(defaultSettings));
+        
         currentUserCache = mockUser;
         localStorage.setItem('sag_current_user', JSON.stringify(mockUser));
         return mockUser;
     }
 
-    const agencyId = `agency_${Date.now()}`;
+    // Cloud Registration (Standard logic but passing plan in metadata)
     const { data, error } = await supabase.auth.signUp({
         email,
         password: 'password123',
-        options: { data: { name, role: 'Owner', agencyId } }
+        options: { data: { name, role: 'Owner', agencyId, prePaidPlan: plan } }
     });
 
     if (error) throw new Error(error.message);
     if (data.user) {
         const user: User = { id: data.user.id, name, email, role: 'Owner', agencyId };
-        // Settings init would happen here in cloud
         currentUserCache = user;
         localStorage.setItem('sag_current_user', JSON.stringify(user));
         return user;

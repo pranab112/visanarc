@@ -163,7 +163,14 @@ export const fetchSettings = async (): Promise<AgencySettings> => {
         notifications: { emailOnVisa: true, dailyReminders: true },
         subscription: { plan: 'Enterprise' },
         testPrepBatches: ['Morning (7-8 AM)', 'Day (12-1 PM)', 'Evening (5-6 PM)'],
-        branches: [{id: 'main', name: 'Head Office', location: 'Main'}]
+        branches: [{id: 'main', name: 'Head Office', location: 'Main'}],
+        leadForm: {
+            enabled: true,
+            title: 'Apply Now',
+            description: 'Start your study abroad journey today.',
+            themeColor: '#4f46e5',
+            fields: { phone: true, targetCountry: true, courseInterest: true, educationHistory: true }
+        }
     };
     localStorage.setItem(key, JSON.stringify(defaultSettings));
     return defaultSettings;

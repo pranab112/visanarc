@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X } from 'lucide-react';
+import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X, Settings2 } from 'lucide-react';
 import { AgencySettings, Country, SubscriptionPlan, Branch } from '../../types';
 import { fetchSettings, saveSettings, fetchAllData, clearAllData, importData } from '../../services/storageService';
 import { LeadFormBuilder } from './LeadFormBuilder';
@@ -10,7 +10,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
-    const [activeTab, setActiveTab] = useState<'general' | 'lead-form' | 'branches'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'branches' | 'leads'>('general');
     const [settings, setSettings] = useState<AgencySettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -193,7 +193,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900">Agency Settings</h1>
-                        <p className="text-slate-500 mt-1">Manage your agency profile, preferences, and data.</p>
+                        <p className="text-slate-500 mt-1">Manage your agency profile, preferences, and lead capture.</p>
                     </div>
                     {activeTab === 'general' && (
                         <button 
@@ -221,6 +221,14 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                          {activeTab === 'general' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
                      </button>
                      <button 
+                        onClick={() => setActiveTab('leads')}
+                        className={`pb-4 px-2 font-medium text-sm transition-colors relative flex items-center ${activeTab === 'leads' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
+                     >
+                         <Magnet size={16} className="mr-2"/>
+                         Lead Capture
+                         {activeTab === 'leads' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
+                     </button>
+                     <button 
                         onClick={() => setActiveTab('branches')}
                         className={`pb-4 px-2 font-medium text-sm transition-colors relative flex items-center ${activeTab === 'branches' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
                      >
@@ -228,19 +236,9 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                          Branch Management
                          {activeTab === 'branches' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
                      </button>
-                     <button 
-                        onClick={() => setActiveTab('lead-form')}
-                        className={`pb-4 px-2 font-medium text-sm transition-colors relative flex items-center ${activeTab === 'lead-form' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
-                     >
-                         <Magnet size={16} className="mr-2"/>
-                         Lead Capture
-                         {activeTab === 'lead-form' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
-                     </button>
                 </div>
 
-                {activeTab === 'lead-form' ? (
-                    <LeadFormBuilder onPreview={() => onOpenPublicForm && onOpenPublicForm()} />
-                ) : activeTab === 'branches' ? (
+                {activeTab === 'branches' ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
                             <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center border-b border-slate-100 pb-4">
@@ -287,6 +285,8 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                             </div>
                         </div>
                     </div>
+                ) : activeTab === 'leads' ? (
+                    <LeadFormBuilder onPreview={onOpenPublicForm || (() => {})} />
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
@@ -422,7 +422,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
                             <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 text-center">
                                 <p className="font-bold text-slate-600">StudyAbroad Genius</p>
-                                <p>Version 3.0-I2 (Restore Point)</p>
+                                <p>Version 3.0-I3 (Restore Point)</p>
                                 <p className="mt-1">Licensed to: {settings.agencyName}</p>
                             </div>
                         </div>

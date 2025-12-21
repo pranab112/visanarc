@@ -1,3 +1,4 @@
+
 // @google/genai coding guidelines followed: Using GoogleGenAI with named apiKey parameter, correct model selection for complex tasks, and property-based text extraction.
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -38,24 +39,50 @@ export const analyzeVisaRisk = async (
     
     ${profile}
 
-    Provide a response with the following sections:
-    1. **Risk Score**: (Low / Medium / High)
-    2. **Approval Probability**: (Estimated %)
-    3. **Key Strengths**: Bullet points of what works in their favor.
-    4. **Risk Factors**: Bullet points of potential red flags (e.g. gaps, low score).
-    5. **Recommendations**: 3 specific, actionable steps to improve their odds (e.g. explaining the gap, specific financial documents).
-    
-    Be realistic and strict based on current immigration trends for ${country}.`;
+    Evaluate the profile strictly based on current immigration trends for ${country}.`;
 
     // Upgraded to gemini-3-pro-preview for complex reasoning and analysis task.
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            riskScore: { 
+              type: Type.STRING, 
+              enum: ["Low", "Medium", "High"],
+              description: "The overall risk level of the application."
+            },
+            approvalProbability: { 
+              type: Type.STRING, 
+              description: "Estimated percentage chance of approval (e.g., '85%')."
+            },
+            keyStrengths: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "List of positive aspects of the profile."
+            },
+            riskFactors: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "List of potential red flags or weaknesses."
+            },
+            recommendations: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "Actionable steps to improve the application success rate."
+            }
+          },
+          required: ["riskScore", "approvalProbability", "keyStrengths", "riskFactors", "recommendations"]
+        }
+      }
     });
-    return response.text || "Failed to analyze risk.";
+    return response.text || "{}";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Error analyzing visa risk.";
+    throw new Error("Error analyzing visa risk.");
   }
 };
 

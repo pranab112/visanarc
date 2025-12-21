@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X, Magnet } from 'lucide-react';
 import { fetchSettings } from '../services/storageService';
 import { getCurrentUser, logout } from '../services/authService';
 import { AgencySettings, User } from '../types';
@@ -158,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
         
         <div className="mt-4 text-center border-t border-slate-800 pt-3">
-            <span className="text-[10px] text-slate-600 font-mono block">v3.0-I2-STABLE</span>
+            <span className="text-[10px] text-slate-600 font-mono block">v3.0-I3-STABLE</span>
             <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Property of SMM84.</span>
         </div>
     </div>

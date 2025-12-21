@@ -265,17 +265,19 @@ export interface Task {
 
 export type SubscriptionPlan = 'Free' | 'Pro' | 'Enterprise';
 
+export interface LeadFormFieldConfig {
+    phone: boolean;
+    targetCountry: boolean;
+    courseInterest: boolean;
+    educationHistory: boolean;
+}
+
 export interface LeadFormConfig {
     enabled: boolean;
     title: string;
     description: string;
-    fields: {
-        phone: boolean;
-        targetCountry: boolean;
-        courseInterest: boolean;
-        educationHistory: boolean;
-    };
     themeColor: string;
+    fields: LeadFormFieldConfig;
 }
 
 export interface AgencySettings {
@@ -297,9 +299,9 @@ export interface AgencySettings {
     emailVisaGranted: string;
     whatsappUpdate: string;
   };
-  leadForm?: LeadFormConfig;
   testPrepBatches?: string[]; 
   branches?: Branch[]; 
+  leadForm?: LeadFormConfig;
 }
 
 export type UserRole = 'Owner' | 'Counsellor' | 'Viewer' | 'Student';

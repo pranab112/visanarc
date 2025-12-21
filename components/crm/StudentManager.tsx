@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType } from '../../types';
@@ -332,25 +333,19 @@ export const StudentManager: React.FC = () => {
 
   const parsedRiskReport = useMemo(() => {
     if (!selectedStudent?.riskAnalysis?.result) return null;
-    const text = selectedStudent.riskAnalysis.result;
-    
-    // Improved robust parsing for structured Gemini output
-    const getList = (header: string) => {
-        const regex = new RegExp(`${header}\\*\\*:(.*?)(?=\\n\\d\\.|\\*\\*|$)`, 'is');
-        const match = text.match(regex);
-        if (!match) return [];
-        return match[1].split('\n')
-            .filter(l => l.trim().startsWith('-') || l.trim().startsWith('*'))
-            .map(l => l.trim().substring(1).trim());
-    };
-
-    return {
-        score: text.match(/Risk Score\*\*:\s*([^\n]*)/i)?.[1]?.trim() || 'N/A',
-        probability: text.match(/Approval Probability\*\*:\s*([^\n]*)/i)?.[1]?.trim() || 'N/A',
-        strengths: getList('Key Strengths'),
-        factors: getList('Risk Factors'),
-        recommendations: getList('Recommendations')
-    };
+    try {
+        const data = JSON.parse(selectedStudent.riskAnalysis.result);
+        return {
+            score: data.riskScore || 'N/A',
+            probability: data.approvalProbability || 'N/A',
+            strengths: Array.isArray(data.keyStrengths) ? data.keyStrengths : [],
+            factors: Array.isArray(data.riskFactors) ? data.riskFactors : [],
+            recommendations: Array.isArray(data.recommendations) ? data.recommendations : []
+        };
+    } catch (e) {
+        console.error("Failed to parse risk report JSON", e);
+        return null;
+    }
   }, [selectedStudent]);
 
   const handleAddStudent = async () => {
@@ -1547,7 +1542,7 @@ export const StudentManager: React.FC = () => {
                                   <input className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.gpa} onChange={e => setNewStudentData({...newStudentData, gpa: e.target.value})} placeholder="e.g. 3.4 or 75%" />
                               </div>
                               <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">English Test</label>
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">English Test</label>
                                   <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.testType} onChange={e => setNewStudentData({...newStudentData, testType: e.target.value as any})}>
                                       <option value="None">None / PTE Academic</option>
                                       <option value="IELTS">IELTS</option>

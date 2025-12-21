@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AgencySettings } from '../../types';
 import { fetchSettings, saveSettings } from '../../services/storageService';
-import { Loader2, Save, ExternalLink, Code, Copy, Eye, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, ExternalLink, Code, Copy, Eye, CheckCircle2, RotateCw } from 'lucide-react';
 
 interface LeadFormBuilderProps {
     onPreview: () => void;
@@ -12,6 +12,7 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
     const [settings, setSettings] = useState<AgencySettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
 
     useEffect(() => {
@@ -29,28 +30,40 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
         setSaving(true);
         await saveSettings(settings);
         setSaving(false);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
     };
 
-    const updateField = (field: keyof typeof settings.leadForm.fields, value: boolean) => {
-        if (!settings?.leadForm) return;
+    const getDefaultLeadForm = () => ({
+        enabled: true,
+        title: 'Apply Now',
+        description: 'Start your study abroad journey today.',
+        themeColor: '#4f46e5',
+        fields: { phone: true, targetCountry: true, courseInterest: true, educationHistory: true }
+    });
+
+    const updateField = (field: string, value: boolean) => {
+        if (!settings) return;
+        const currentLeadForm = settings.leadForm || getDefaultLeadForm();
         setSettings({
             ...settings,
             leadForm: {
-                ...settings.leadForm,
+                ...currentLeadForm,
                 fields: {
-                    ...settings.leadForm.fields,
-                    [field]: value
+                    ...currentLeadForm.fields,
+                    [field as keyof typeof currentLeadForm.fields]: value
                 }
             }
         });
     };
 
     const updateConfig = (key: string, value: any) => {
-        if (!settings?.leadForm) return;
+        if (!settings) return;
+        const currentLeadForm = settings.leadForm || getDefaultLeadForm();
         setSettings({
             ...settings,
             leadForm: {
-                ...settings.leadForm,
+                ...currentLeadForm,
                 [key]: value
             }
         });
@@ -63,9 +76,9 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
         setTimeout(() => setCopySuccess(false), 2000);
     };
 
-    if (loading || !settings?.leadForm) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-indigo-600"/></div>;
+    if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-indigo-600"/></div>;
 
-    const { leadForm } = settings;
+    const leadForm = settings?.leadForm || getDefaultLeadForm();
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -169,10 +182,14 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
                             <button 
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 transition-colors shadow-lg flex items-center justify-center"
+                                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center ${
+                                    saveSuccess 
+                                    ? 'bg-emerald-600 text-white' 
+                                    : 'bg-slate-900 text-white hover:bg-indigo-600'
+                                }`}
                             >
-                                {saving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" size={18} />}
-                                Save Configuration
+                                {saving ? <RotateCw className="animate-spin mr-2" /> : saveSuccess ? <CheckCircle2 className="mr-2" size={18} /> : <Save className="mr-2" size={18} />}
+                                {saving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Configuration'}
                             </button>
                         </div>
                     </div>
@@ -186,7 +203,7 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
                     <div className="h-full pt-8 overflow-y-auto bg-white p-6">
                         <div className="text-center mb-8">
                             <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: leadForm.themeColor }}>
-                                {settings.agencyName.charAt(0)}
+                                {settings?.agencyName?.charAt(0) || 'A'}
                             </div>
                             <h2 className="text-xl font-bold text-slate-900">{leadForm.title}</h2>
                             <p className="text-slate-500 text-sm mt-2">{leadForm.description}</p>
