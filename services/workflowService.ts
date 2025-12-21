@@ -41,34 +41,10 @@ export const runStatusAutomation = async (student: Student, newStatus: Applicati
     }
 
     else if (newStatus === ApplicationStatus.VisaGranted) {
+        // Only operational tasks are created. 
+        // Automatic finance/invoice generation has been removed per user requirement.
         createTask(`Conduct Pre-Departure Briefing: ${student.name}`, 'High', 1, '15:00');
         createTask(`Archive Student File: ${student.name}`, 'Low', 5, '17:00');
-
-        // --- STUDENT SUCCESS FEE INVOICE ---
-        try {
-            const existingInvoices = await fetchInvoices();
-            const hasSuccessInvoice = existingInvoices.some(i => 
-                i.studentId === student.id && i.description.includes('Visa Success')
-            );
-
-            if (!hasSuccessInvoice) {
-                const autoInvoice: Invoice = {
-                    id: Date.now().toString() + '_auto',
-                    invoiceNumber: `INV-SUCCESS-${Math.floor(1000 + Math.random() * 9000)}`,
-                    studentId: student.id,
-                    studentName: student.name,
-                    amount: 20000, 
-                    description: `Visa Success Fee - ${student.targetCountry}`,
-                    status: 'Pending',
-                    date: Date.now(),
-                    branchId: student.branchId || 'main'
-                };
-                await saveInvoices([autoInvoice, ...existingInvoices]);
-                logActivity('CREATE', 'Invoice', `Auto-generated Visa Success Invoice for ${student.name}`);
-            }
-        } catch (e) {
-            console.error("Student invoice automation failed", e);
-        }
     }
 
     if (newTasks.length > 0) {
