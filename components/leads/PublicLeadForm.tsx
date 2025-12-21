@@ -240,7 +240,7 @@ export const PublicLeadForm: React.FC<PublicLeadFormProps> = ({ onClose }) => {
             </div>
             
             <div className="mt-8 text-center">
-                <p className="text-slate-400 text-xs font-medium">Powered by StudyAbroad Genius</p>
+                <p className="text-slate-400 text-xs font-medium">Powered by Visa In Arc</p>
             </div>
         </div>
     );

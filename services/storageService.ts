@@ -122,6 +122,7 @@ export const fetchExpenses = async (): Promise<Expense[]> =>
 
 export const saveExpenses = async (expenses: Expense[]): Promise<void> => {
     saveTable('expenses', expenses, (ex: Expense, agencyId: string) => ({
+        // Fix: Changed ex.recorded_by to ex.recordedBy to match the Expense interface
         id: ex.id, agency_id: agencyId, category: ex.category, amount: ex.amount, description: ex.description, date: ex.date, recorded_by: ex.recordedBy, data: ex
     }));
 };
@@ -154,7 +155,7 @@ export const fetchSettings = async (): Promise<AgencySettings> => {
     if (local) return JSON.parse(local);
 
     const defaultSettings: AgencySettings = {
-        agencyName: 'StudyAbroad Genius (Local)',
+        agencyName: 'Visa In Arc',
         email: 'dev@local.host',
         phone: '9800000000',
         address: 'Local Development Environment',

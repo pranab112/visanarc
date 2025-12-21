@@ -400,7 +400,7 @@ export const LeadCaptureDashboard: React.FC<LeadCaptureDashboardProps> = ({ onPr
                                             </button>
                                         </div>
                                         <div className="text-center py-6">
-                                            <p className="text-[9px] font-black text-slate-200 uppercase tracking-widest">Powered by StudyAbroad Genius</p>
+                                            <p className="text-[9px] font-black text-slate-200 uppercase tracking-widest">Powered by Visa In Arc</p>
                                         </div>
                                     </div>
                                 </div>
@@ -481,6 +481,9 @@ export const LeadCaptureDashboard: React.FC<LeadCaptureDashboardProps> = ({ onPr
                     )}
                 </div>
             </main>
+            <div className="mt-8 text-center text-[10px] text-slate-300">
+                Powered by Visa In Arc
+            </div>
         </div>
     );
 };

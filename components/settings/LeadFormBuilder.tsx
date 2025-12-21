@@ -203,7 +203,7 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
                     <div className="h-full pt-8 overflow-y-auto bg-white p-6">
                         <div className="text-center mb-8">
                             <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: leadForm.themeColor }}>
-                                {settings?.agencyName?.charAt(0) || 'A'}
+                                {settings?.agencyName?.charAt(0) || 'V'}
                             </div>
                             <h2 className="text-xl font-bold text-slate-900">{leadForm.title}</h2>
                             <p className="text-slate-500 text-sm mt-2">{leadForm.description}</p>
@@ -251,7 +251,7 @@ export const LeadFormBuilder: React.FC<LeadFormBuilderProps> = ({ onPreview }) =
                             </button>
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-300">
-                            Powered by StudyAbroad Genius
+                            Powered by Visa In Arc
                         </div>
                     </div>
                 </div>

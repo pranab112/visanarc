@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
 import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType } from '../../types';
 import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners } from '../../services/storageService';
 import { getCurrentUser } from '../../services/authService';
@@ -8,11 +7,12 @@ import { uploadFile, deleteFile } from '../../services/fileStorageService';
 import { DocRequirement } from '../../constants';
 import { simulateSendEmail, generateWhatsAppLink, fillTemplate } from '../../services/communicationService';
 import { logActivity } from '../../services/auditService';
-import { extractPassportData, analyzeVisaRisk } from '../../services/geminiService';
 import { runStatusAutomation } from '../../services/workflowService';
 import { generatePartnerBundle } from '../../services/bundleService';
 import { getRequiredDocuments, generateReceipt } from '../../services/documentService';
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
+// Added missing AI service imports
+import { analyzeVisaRisk, extractPassportData } from '../../services/geminiService';
 
 /**
  * Optimized Student Card Component
@@ -20,18 +20,18 @@ import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 const StudentCard = React.memo(({ student, onClick }: { student: Student, onClick: (id: string) => void }) => (
   <div 
     onClick={() => onClick(student.id)} 
-    className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between h-[192px] group"
+    className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between h-[192px] group relative"
   >
       <div>
           <div className="flex justify-between mb-3">
             <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold group-hover:scale-110 transition-transform">
               {student.name.charAt(0)}
             </div>
-            <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold uppercase">
+            <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold uppercase mr-2">
               {student.status}
             </span>
           </div>
-          <h3 className="font-bold text-lg truncate text-slate-800">{student.name}</h3>
+          <h3 className="font-bold text-lg truncate text-slate-800 pr-6">{student.name}</h3>
           <p className="text-xs text-slate-400">{student.phone || 'No phone recorded'}</p>
       </div>
       <div className="pt-4 border-t flex justify-between items-center text-xs text-slate-500">
@@ -78,6 +78,7 @@ export const StudentManager: React.FC = () => {
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [analyzingRisk, setAnalyzingRisk] = useState(false);
+  const [isBundling, setIsBundling] = useState(false);
 
   // Financial States
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
@@ -310,6 +311,7 @@ export const StudentManager: React.FC = () => {
             Refusal Details: ${selectedStudent.borderDetails || 'None'}
             Financial Budget: ${selectedStudent.financialCap || 'Medium'}
         `;
+        // Using imported analyzeVisaRisk function
         const result = await analyzeVisaRisk(profile, selectedStudent.targetCountry);
         
         const updatedStudent = {
@@ -411,6 +413,7 @@ export const StudentManager: React.FC = () => {
           const reader = new FileReader();
           reader.onload = async (event) => {
               const base64Data = (event.target?.result as string).split(',')[1];
+              // Using imported extractPassportData function
               const result = await extractPassportData(base64Data, file.type);
               if (result) {
                   setNewStudentData(prev => ({
@@ -493,6 +496,28 @@ export const StudentManager: React.FC = () => {
       const updatedEntries = (selectedStudent.noteEntries || []).filter(n => n.id !== noteId);
       const updated = { ...selectedStudent, noteEntries: updatedEntries };
       await handleAsyncUpdate(students.map(s => s.id === updated.id ? updated : s));
+  };
+
+  const handleDownloadBundle = async () => {
+      if (!selectedStudent || isBundling) return;
+      setIsBundling(true);
+      try {
+          const zipContent = await generatePartnerBundle(selectedStudent, settings?.agencyName || 'Agency Pro');
+          const url = URL.createObjectURL(zipContent);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${selectedStudent.name.replace(/\s+/g, '_')}_Application_Pack.zip`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          logActivity('EXPORT', 'File', `Generated and downloaded application bundle for ${selectedStudent.name}`);
+          showToast("Application bundle downloaded successfully!");
+      } catch (err) {
+          showToast("Bundle generation failed. Please check network.", "error");
+      } finally {
+          setIsBundling(false);
+      }
   };
 
   const renderDocumentItem = (doc: DocRequirement, isCountrySpecific: boolean = false) => {
@@ -600,6 +625,8 @@ export const StudentManager: React.FC = () => {
 
   const allSelectedDocs = selectedStudent ? getRequiredDocuments(selectedStudent) : [];
   const categories = Array.from(new Set(allSelectedDocs.map(d => d.category)));
+  const completedDocsCount = useMemo(() => selectedStudent ? allSelectedDocs.filter(d => selectedStudent.documents[d.name] === 'Uploaded').length : 0, [selectedStudent, allSelectedDocs]);
+  const isFullyDocumented = useMemo(() => selectedStudent && allSelectedDocs.length > 0 && completedDocsCount === allSelectedDocs.length, [selectedStudent, allSelectedDocs, completedDocsCount]);
 
   const getNoteTypeStyles = (type: NoteType) => {
     switch(type) {
@@ -1083,22 +1110,59 @@ export const StudentManager: React.FC = () => {
                              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Uploaded Files</p>
                                  <h2 className="text-4xl font-black mt-2 text-emerald-600">
-                                     {allSelectedDocs.filter(d => selectedStudent.documents[d.name] === 'Uploaded').length}
+                                     {completedDocsCount}
                                  </h2>
                                  <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
                                      <div 
                                         className="h-full bg-emerald-500 transition-all duration-1000" 
-                                        style={{ width: `${(allSelectedDocs.filter(d => selectedStudent.documents[d.name] === 'Uploaded').length / allSelectedDocs.length) * 100}%` }}
+                                        style={{ width: `${(completedDocsCount / allSelectedDocs.length) * 100}%` }}
                                      ></div>
                                  </div>
                              </div>
                              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Missing Docs</p>
-                                 <h2 className="text-4xl font-black mt-2 text-rose-500">
-                                     {allSelectedDocs.filter(d => selectedStudent.documents[d.name] !== 'Uploaded').length}
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Readiness Status</p>
+                                 <h2 className={`text-4xl font-black mt-2 ${isFullyDocumented ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                     {Math.round((completedDocsCount / allSelectedDocs.length) * 100)}%
                                  </h2>
-                                 <p className="text-[10px] font-bold text-rose-400 mt-4 uppercase">Submission Blocked</p>
+                                 <p className={`text-[10px] font-bold mt-4 uppercase ${isFullyDocumented ? 'text-indigo-600' : 'text-rose-400'}`}>
+                                     {isFullyDocumented ? 'Application Launch Ready' : 'Submission Blocked'}
+                                 </p>
                              </div>
+                        </div>
+
+                        {/* PREMIUM LAUNCH BUNDLER CTA */}
+                        <div className={`p-8 rounded-[2.5rem] border-2 transition-all duration-500 flex flex-col md:flex-row items-center justify-between gap-6 mb-10 ${
+                            isFullyDocumented 
+                            ? 'bg-indigo-50 border-indigo-200 shadow-xl shadow-indigo-100 animate-pulse-subtle' 
+                            : 'bg-white border-slate-100 border-dashed opacity-75'
+                        }`}>
+                            <div className="flex items-center space-x-5">
+                                <div className={`p-5 rounded-[1.5rem] shadow-lg transition-all ${isFullyDocumented ? 'bg-indigo-600 text-white scale-110' : 'bg-slate-100 text-slate-300'}`}>
+                                    <Package size={32} />
+                                </div>
+                                <div>
+                                    <h3 className={`text-xl font-black tracking-tight ${isFullyDocumented ? 'text-slate-900' : 'text-slate-400'}`}>Launch Application Bundle</h3>
+                                    <p className="text-sm text-slate-500 font-medium mt-1">Renames, categorizes, and organizes all docs into a single ZIP for portal upload.</p>
+                                </div>
+                            </div>
+                            
+                            <div className="shrink-0">
+                                {isFullyDocumented ? (
+                                    <button 
+                                        onClick={handleDownloadBundle}
+                                        disabled={isBundling}
+                                        className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all flex items-center group active:scale-95"
+                                    >
+                                        {isBundling ? <Loader2 size={22} className="animate-spin mr-3" /> : <Download size={22} className="mr-3 group-hover:bounce" />}
+                                        {isBundling ? 'Compiling Package...' : 'Download Launch Ready ZIP'}
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center space-x-3 px-8 py-5 bg-slate-50 rounded-[2rem] border border-slate-200 text-slate-400">
+                                        <Lock size={18} />
+                                        <span className="text-xs font-black uppercase tracking-widest">Locked: Needs 100% Upload</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Document Categories */}
@@ -1551,7 +1615,7 @@ export const StudentManager: React.FC = () => {
                                   </select>
                               </div>
                               <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Current Score</label>
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Current Score</label>
                                   <input className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.testScore} onChange={e => setNewStudentData({...newStudentData, testScore: e.target.value})} placeholder="e.g. 7.0 or 65" />
                               </div>
                           </div>

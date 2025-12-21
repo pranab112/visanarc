@@ -1,3 +1,4 @@
+
 import { Invoice, AgencySettings, Student, Country } from '../types';
 import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS, DocRequirement } from '../constants';
 
@@ -39,7 +40,7 @@ export const getRequiredDocuments = (student: Student): (DocRequirement & { isCo
 
 export const generateReceipt = (invoice: Invoice, settings: AgencySettings | null) => {
     const currency = settings?.currency || 'NPR';
-    const agencyName = settings?.agencyName || 'StudyAbroad Genius';
+    const agencyName = settings?.agencyName || 'Visa In Arc';
     const agencyAddress = settings?.address || 'Kathmandu, Nepal';
     const agencyPhone = settings?.phone || '+977-1-4000000';
     const agencyEmail = settings?.email || 'info@agency.com';
@@ -152,6 +153,7 @@ export const generateReceipt = (invoice: Invoice, settings: AgencySettings | nul
             <div class="footer">
                 <p>Thank you for your business.</p>
                 <p>This is a computer-generated receipt.</p>
+                <p style="font-size: 9px; opacity: 0.5; margin-top: 10px;">Powered by Visa In Arc</p>
             </div>
 
             <script>

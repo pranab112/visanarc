@@ -82,7 +82,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `studyabroad_genius_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `visa_in_arc_backup_${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -249,7 +249,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                             <div className="flex gap-4 items-end mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Branch Name</label>
-                                    <input className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white" placeholder="e.g. Chitwan Branch" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
+                                    <input className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white" placeholder="e.g. Visa In Arc Branch" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
                                 </div>
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Location</label>
@@ -421,8 +421,8 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                             </div>
 
                             <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 text-center">
-                                <p className="font-bold text-slate-600">StudyAbroad Genius</p>
-                                <p>Version 3.0-I3 (Restore Point)</p>
+                                <p className="font-bold text-slate-600">Visa In Arc</p>
+                                <p>Version 3.0-H2 (Restore Point)</p>
                                 <p className="mt-1">Licensed to: {settings.agencyName}</p>
                             </div>
                         </div>
@@ -433,7 +433,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
             {/* Payment Modal */}
             {showUpgradeModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-slate-100">
                             <h3 className="font-bold text-xl text-slate-900">Upgrade to {showUpgradeModal}</h3>
                             <p className="text-slate-500 text-sm mt-1">Select your preferred payment method</p>

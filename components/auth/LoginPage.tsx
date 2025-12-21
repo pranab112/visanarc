@@ -48,11 +48,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-600 rounded-[2rem] shadow-2xl shadow-indigo-200 mb-6">
                     <Globe className="text-white w-10 h-10" />
                 </div>
-                <h1 className="text-4xl font-black text-slate-900 tracking-tight">StudyAbroad Genius</h1>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Visa In Arc</h1>
                 <p className="text-slate-500 mt-2 font-medium">Enterprise CRM & Intelligence Platform</p>
             </div>
 
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-white w-full max-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
                 <div className="flex border-b border-slate-100 bg-slate-50/50">
                     <button 
                         onClick={() => setMode('login')}

@@ -14,7 +14,8 @@ export enum ApplicationStatus {
   OfferReceived = 'Offer Received',
   VisaGranted = 'Visa Granted',
   VisaRejected = 'Visa Rejected',
-  Alumni = 'Alumni'
+  Alumni = 'Alumni',
+  Discontinued = 'Discontinued'
 }
 
 export enum NocStatus {
@@ -169,7 +170,7 @@ export interface Student {
       enrolled: boolean;
       batch?: string;
       studyMode?: 'Physical' | 'Online';
-      materialsIssued?: boolean;
+      materialsIssued?: 'Not Issued' | 'Issued' | 'Partially Issued';
       instructorName?: string;
       enrollmentDate?: number;
       examDate?: number;

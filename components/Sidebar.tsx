@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       <div className="p-6 border-b border-slate-800 flex justify-between items-center">
         <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-            Abroad Genius
+            Visa In Arc
             </h1>
             <div className="flex items-center mt-1">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
@@ -158,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
         
         <div className="mt-4 text-center border-t border-slate-800 pt-3">
-            <span className="text-[10px] text-slate-600 font-mono block">v3.0-I3-STABLE</span>
+            <span className="text-[10px] text-slate-600 font-mono block">v3.0-H2-STABLE</span>
             <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Property of SMM84.</span>
         </div>
     </div>

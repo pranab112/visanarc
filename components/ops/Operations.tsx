@@ -4,7 +4,7 @@ import { fetchStudents, saveStudents, fetchTasks, saveTasks, fetchPartners } fro
 import { Student, ApplicationStatus, NocStatus, Country, Task, Partner, NocMetadata } from '../../types';
 import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS } from '../../constants';
 import { generateGoogleCalendarLink, generateWhatsAppLink } from '../../services/communicationService';
-import { Search, Clock, AlertCircle, Filter, Trash2, Phone, Mail, DollarSign, CheckCircle2, Lock, X, Plus, Calendar, Loader2, CalendarPlus, Save, Check, ExternalLink, Bell, BellRing, BellOff, Trophy, Sparkles, MessageCircle, PhoneCall, Building, GraduationCap, ArrowRight, ClipboardCheck, FileText, Landmark, User, Hash, Globe, ChevronRight, ListTodo, CircleCheck, Info, CalendarDays, PartyPopper } from 'lucide-react';
+import { Search, Clock, AlertCircle, Filter, Trash2, Phone, Mail, DollarSign, CheckCircle2, Lock, X, Plus, Calendar, Loader2, CalendarPlus, Save, Check, ExternalLink, Bell, BellRing, BellOff, Trophy, Sparkles, MessageCircle, PhoneCall, Building, GraduationCap, ArrowRight, ClipboardCheck, FileText, Landmark, User, Hash, Globe, ChevronRight, ListTodo, CircleCheck, Info, CalendarDays, PartyPopper, Ban } from 'lucide-react';
 import { runStatusAutomation } from '../../services/workflowService';
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 
@@ -296,6 +296,7 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
           case ApplicationStatus.VisaGranted: return 'bg-emerald-50 text-emerald-900';
           case ApplicationStatus.Alumni: return 'bg-slate-900 text-white';
           case ApplicationStatus.VisaRejected: return 'bg-rose-50 text-rose-900';
+          case ApplicationStatus.Discontinued: return 'bg-slate-200 text-slate-600';
           default: return 'bg-slate-100 text-slate-700';
       }
   };
@@ -303,6 +304,7 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
   const getColumnIcon = (status: ApplicationStatus) => {
       switch(status) {
           case ApplicationStatus.Alumni: return <PartyPopper size={16} className="text-amber-400" />;
+          case ApplicationStatus.Discontinued: return <Ban size={16} className="text-slate-400" />;
           default: return null;
       }
   };
@@ -363,7 +365,7 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
                         setDraggedStudentId(student.id);
                         e.dataTransfer.setData('text/plain', student.id);
                     }}
-                    className={`bg-white p-4 rounded-lg shadow-sm border border-slate-200 group hover:border-indigo-300 transition-all cursor-move`}
+                    className={`bg-white p-4 rounded-lg shadow-sm border border-slate-200 group hover:border-indigo-300 transition-all cursor-move ${status === ApplicationStatus.Discontinued ? 'opacity-60 grayscale' : ''}`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 uppercase">{student.targetCountry}</span>
@@ -446,7 +448,7 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
       {/* Visa Success Confirmation Modal */}
       {visaSuccessStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+           <div className="bg-white rounded-3xl shadow-2xl w-full max-lg overflow-hidden animate-in zoom-in-95 duration-300">
               <div className="p-8 text-center">
                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600 animate-bounce">
                     <Trophy size={32} />

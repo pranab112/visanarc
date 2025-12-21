@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 /* Added missing MapPin icon to imports from lucide-react */
 import { BookOpen, Download, ExternalLink, FileText, GraduationCap, Plus, X, UploadCloud, Save, Loader2, Link, Users, Clock, Calendar, Filter, Search, CheckCircle2, XCircle, CalendarCheck, ClipboardList, Trash2, File, FolderArchive, Image as ImageIcon, MoreVertical, UserPlus, CreditCard, Key, Landmark, ShieldCheck, Check, Timer, Pencil, Globe, ArrowRight, Info, ChevronRight, LayoutGrid, List, Trophy, Target, BarChart, TrendingUp, History, ChevronDown, ChevronUp, ArrowLeft, UserCircle, Briefcase, DollarSign, MonitorPlay, Book, Ticket, MapPin } from 'lucide-react';
@@ -47,7 +48,7 @@ export const TestPrepHub: React.FC = () => {
         name: '',
         batch: '',
         studyMode: 'Physical' as 'Physical' | 'Online',
-        materialsIssued: false,
+        materialsIssued: 'Not Issued' as 'Not Issued' | 'Issued' | 'Partially Issued',
         testType: 'IELTS' as any,
         targetScore: '',
         instructorName: '',
@@ -1137,22 +1138,25 @@ export const TestPrepHub: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col space-y-3">
                                     <div className="flex items-center space-x-3">
                                         <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600">
                                             <Book size={18}/>
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-slate-400 uppercase">Materials Logistics</p>
-                                            <p className="text-sm font-bold text-slate-800">Books Issued?</p>
+                                            <p className="text-sm font-bold text-slate-800">Study Materials Status</p>
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={() => setEnrollData({...enrollData, materialsIssued: !enrollData.materialsIssued})}
-                                        className={`w-12 h-6 rounded-full p-1 transition-all ${enrollData.materialsIssued ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                    <select 
+                                        className="w-full p-2 border border-slate-200 rounded-xl bg-white text-sm font-bold"
+                                        value={enrollData.materialsIssued}
+                                        onChange={(e) => setEnrollData({...enrollData, materialsIssued: e.target.value as any})}
                                     >
-                                        <div className={`w-4 h-4 bg-white rounded-full transition-all ${enrollData.materialsIssued ? 'translate-x-6' : 'translate-x-0'}`} />
-                                    </button>
+                                        <option value="Not Issued">Not Issued</option>
+                                        <option value="Partially Issued">Partially Issued</option>
+                                        <option value="Issued">Fully Issued</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Initial Fee Status *</label>
@@ -1214,6 +1218,9 @@ export const TestPrepHub: React.FC = () => {
                     </div>
                 </div>
             )}
+            <div className="mt-8 text-center text-[10px] text-slate-300">
+                Powered by Visa In Arc
+            </div>
         </div>
     );
 };
