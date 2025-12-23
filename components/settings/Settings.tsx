@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X, Settings2, Lock, Sparkles, ArrowRight } from 'lucide-react';
-import { AgencySettings, Country, SubscriptionPlan, Branch } from '../../types';
+import { AgencySettings, Country, SubscriptionPlan, Branch, User } from '../../types';
 import { fetchSettings, saveSettings, fetchAllData, clearAllData, importData } from '../../services/storageService';
+import { getCurrentUser } from '../../services/authService';
 import { LeadFormBuilder } from './LeadFormBuilder';
 
 interface SettingsProps {
@@ -12,6 +13,7 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
     const [activeTab, setActiveTab] = useState<'general' | 'branches' | 'leads'>('general');
     const [settings, setSettings] = useState<AgencySettings | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -28,8 +30,12 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-            const s = await fetchSettings();
+            const [s, u] = await Promise.all([
+                fetchSettings(),
+                Promise.resolve(getCurrentUser())
+            ]);
             setSettings(s);
+            setUser(u);
             setLoading(false);
         };
         load();
@@ -43,6 +49,21 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         window.location.reload(); // Reload to reflect changes globally
+    };
+
+    const handleSwitchToFree = async () => {
+        if (!settings) return;
+        const newSettings = {
+            ...settings,
+            subscription: {
+                plan: 'Free' as SubscriptionPlan,
+                expiryDate: undefined
+            }
+        };
+        setSettings(newSettings);
+        await saveSettings(newSettings);
+        alert("Switched to Free Version.");
+        window.location.reload();
     };
 
     const handleAddBranch = async () => {
@@ -147,6 +168,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
     const currentPlan = settings.subscription?.plan || 'Free';
     const isEnterprise = currentPlan === 'Enterprise';
+    const isOwner = user?.role === 'Owner';
 
     const PlanCard = ({ title, price, features, recommended, type }: { title: string, price: string, features: string[], recommended?: boolean, type: SubscriptionPlan }) => {
         const isActive = currentPlan === type;
@@ -171,7 +193,11 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                 <button 
                     onClick={() => {
                         if (isActive) return;
-                        setShowUpgradeModal(type);
+                        if (type === 'Free') {
+                            handleSwitchToFree();
+                        } else {
+                            setShowUpgradeModal(type);
+                        }
                     }}
                     disabled={isActive}
                     className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
@@ -180,7 +206,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                         : 'bg-slate-900 text-white hover:bg-indigo-600 shadow-md'
                     }`}
                 >
-                    {isActive ? 'Current Plan' : `Upgrade to ${title}`}
+                    {isActive ? 'Current Plan' : type === 'Free' ? 'Start Free Version' : `Upgrade to ${title}`}
                 </button>
             </div>
         )
@@ -227,7 +253,6 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                      >
                          <Magnet size={16} className="mr-2"/>
                          Lead Capture
-                         {!isEnterprise && <Lock size={12} className="ml-1.5 text-slate-400" />}
                          {activeTab === 'leads' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
                      </button>
                      <button 
@@ -288,61 +313,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                         </div>
                     </div>
                 ) : activeTab === 'leads' ? (
-                    isEnterprise ? (
-                        <LeadFormBuilder onPreview={onOpenPublicForm || (() => {})} />
-                    ) : (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
-                            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-12 text-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-12 opacity-5 text-indigo-600">
-                                    <Magnet size={240} />
-                                </div>
-                                
-                                <div className="relative z-10">
-                                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-sm border border-indigo-100">
-                                        <Crown size={40} />
-                                    </div>
-                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Enterprise Lead Capture</h2>
-                                    <p className="text-slate-500 text-lg mt-3 max-w-xl mx-auto leading-relaxed">
-                                        The whitelabeled student intake system is an **Enterprise feature**. Capture leads directly from your website, social media, and Instagram bio with custom branded forms.
-                                    </p>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mt-10 text-left">
-                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <Sparkles className="text-indigo-600 shrink-0 mt-1" size={18}/>
-                                            <p className="text-sm font-medium text-slate-600">Custom branded forms with your agency logo and colors.</p>
-                                        </div>
-                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <Globe className="text-indigo-600 shrink-0 mt-1" size={18}/>
-                                            <p className="text-sm font-medium text-slate-600">Iframe embed for WordPress, Wix, or your agency site.</p>
-                                        </div>
-                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <CheckCircle2 className="text-indigo-600 shrink-0 mt-1" size={18}/>
-                                            <p className="text-sm font-medium text-slate-600">Automated lead inbox integration in CRM.</p>
-                                        </div>
-                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <ShieldCheck className="text-indigo-600 shrink-0 mt-1" size={18}/>
-                                            <p className="text-sm font-medium text-slate-600">Whitelabeling to remove all "Visa In Arc" branding.</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-                                        <button 
-                                            onClick={() => setShowUpgradeModal('Enterprise')}
-                                            className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all flex items-center active:scale-95"
-                                        >
-                                            Upgrade to Enterprise <ArrowRight className="ml-2" size={16}/>
-                                        </button>
-                                        <button 
-                                            onClick={() => setActiveTab('general')}
-                                            className="text-slate-400 font-bold text-sm hover:text-slate-600 uppercase tracking-widest px-6 py-4"
-                                        >
-                                            Learn More
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )
+                    <LeadFormBuilder onPreview={onOpenPublicForm || (() => {})} />
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
@@ -457,24 +428,28 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
 
                         {/* Right Column: Data Management */}
                         <div className="space-y-6">
-                            <div className="bg-indigo-900 text-white rounded-2xl shadow-xl p-6 relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <h3 className="font-bold text-lg mb-2">Data Management</h3>
-                                    <p className="text-indigo-200 text-sm mb-6">Backup or restore your data safely.</p>
-                                    <div className="space-y-3">
-                                        <button onClick={handleExport} className="w-full bg-white text-indigo-900 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-50 transition-colors"><Download size={18} className="mr-2"/> Export Data</button>
-                                        <button onClick={handleImportClick} className="w-full bg-indigo-800 text-white border border-indigo-700 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors"><Upload size={18} className="mr-2"/> Import Data</button>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
+                            {isOwner && (
+                                <>
+                                    <div className="bg-indigo-900 text-white rounded-2xl shadow-xl p-6 relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <h3 className="font-bold text-lg mb-2">Data Management</h3>
+                                            <p className="text-indigo-200 text-sm mb-6">Backup or restore your data safely.</p>
+                                            <div className="space-y-3">
+                                                <button onClick={handleExport} className="w-full bg-white text-indigo-900 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-50 transition-colors"><Download size={18} className="mr-2"/> Export Data</button>
+                                                <button onClick={handleImportClick} className="w-full bg-indigo-800 text-white border border-indigo-700 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors"><Upload size={18} className="mr-2"/> Import Data</button>
+                                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
+                                            </div>
+                                        </div>
+                                        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Download size={120} /></div>
                                     </div>
-                                </div>
-                                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Download size={120} /></div>
-                            </div>
 
-                            <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 relative overflow-hidden">
-                                <h3 className="font-bold text-red-900 mb-2 flex items-center"><Trash2 size={18} className="mr-2"/> Danger Zone</h3>
-                                <p className="text-slate-500 text-xs mb-6">Irreversible actions. Proceed with caution.</p>
-                                <button onClick={handleReset} className="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">Reset Application</button>
-                            </div>
+                                    <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 relative overflow-hidden">
+                                        <h3 className="font-bold text-red-900 mb-2 flex items-center"><Trash2 size={18} className="mr-2"/> Danger Zone</h3>
+                                        <p className="text-slate-500 text-xs mb-6">Irreversible actions. Proceed with caution.</p>
+                                        <button onClick={handleReset} className="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">Reset Application</button>
+                                    </div>
+                                </>
+                            )}
 
                             <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 text-center">
                                 <p className="font-bold text-slate-600">Visa In Arc</p>
