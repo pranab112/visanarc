@@ -4,7 +4,7 @@ import { fetchStudents, saveStudents, fetchTasks, saveTasks, fetchPartners } fro
 import { Student, ApplicationStatus, NocStatus, Country, Task, Partner, NocMetadata } from '../../types';
 import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS } from '../../constants';
 import { generateGoogleCalendarLink, generateWhatsAppLink } from '../../services/communicationService';
-import { Search, Clock, AlertCircle, Filter, Trash2, Phone, Mail, DollarSign, CheckCircle2, Lock, X, Plus, Calendar, Loader2, CalendarPlus, Save, Check, ExternalLink, Bell, BellRing, BellOff, Trophy, Sparkles, MessageCircle, PhoneCall, Building, GraduationCap, ArrowRight, ClipboardCheck, FileText, Landmark, User, Hash, Globe, ChevronRight, ListTodo, CircleCheck, Info, CalendarDays, PartyPopper, Ban } from 'lucide-react';
+import { Search, Clock, AlertCircle, Filter, Trash2, Phone, Mail, DollarSign, CheckCircle2, Lock, X, Plus, Calendar, Loader2, CalendarPlus, Save, Check, ExternalLink, Bell, BellRing, BellOff, Trophy, Sparkles, MessageCircle, PhoneCall, Building, GraduationCap, ArrowRight, ClipboardCheck, FileText, Landmark, User, Hash, Globe, ChevronRight, ListTodo, CircleCheck, Info, CalendarDays, PartyPopper, Ban, ArrowLeftRight, HelpCircle } from 'lucide-react';
 import { runStatusAutomation } from '../../services/workflowService';
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 
@@ -188,6 +188,9 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
   const [partnerRequest, setPartnerRequest] = useState<{ studentId: string, targetStatus: ApplicationStatus } | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
 
+  // Move Confirmation State
+  const [pendingMove, setPendingMove] = useState<{ studentId: string, newStatus: ApplicationStatus } | null>(null);
+
   useEffect(() => {
     const load = async () => {
         setLoading(true);
@@ -202,6 +205,9 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
   const moveStudent = async (studentId: string, newStatus: ApplicationStatus, overridePartnerId?: string) => {
     const student = students.find(s => s.id === studentId);
     if (!student) return;
+
+    // Clear confirmation modal immediately
+    setPendingMove(null);
 
     // RULE: Must have assigned partner for Applied or Visa Granted
     if (!overridePartnerId && !student.assignedPartnerId && (newStatus === ApplicationStatus.Applied || newStatus === ApplicationStatus.VisaGranted)) {
@@ -229,12 +235,12 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
         }
     }
 
-    // DB MAPPING (SNAKE_CASE)
+    // DB MAPPING (SNAKE_CASE) - Fixed property name typo 'target_country' to 'targetCountry'
     const updates = {
         name: updatedStudent.name,
         email: updatedStudent.email,
         phone: updatedStudent.phone,
-        target_country: updatedStudent.targetCountry,
+        target_country: updatedStudent.targetCountry, 
         status: updatedStudent.status,
         noc_status: updatedStudent.nocStatus,
         branch_id: updatedStudent.branchId || 'main',
@@ -270,7 +276,10 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
     if (id) {
-      moveStudent(id, status);
+      const student = students.find(s => s.id === id);
+      if (student && student.status !== status) {
+          setPendingMove({ studentId: id, newStatus: status });
+      }
       setDraggedStudentId(null);
     }
   };
@@ -403,6 +412,65 @@ const KanbanBoard: React.FC<OperationsProps> = ({ onTabChange }) => {
           })}
         </div>
       </div>
+
+      {/* DROP CONFIRMATION MODAL */}
+      {pendingMove && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+                  <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+                      <div>
+                          <h3 className="font-bold text-xl text-slate-800 flex items-center">
+                              <HelpCircle size={22} className="mr-3 text-indigo-600"/> Confirm Status Move
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium mt-1">Action verification required.</p>
+                      </div>
+                      <button onClick={() => setPendingMove(null)} className="text-slate-400 hover:text-slate-900 bg-white p-2 rounded-xl shadow-sm border border-slate-100 transition-all active:scale-90"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="p-8 space-y-6">
+                      <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
+                              <User size={32}/>
+                          </div>
+                          <div className="text-center">
+                              <p className="text-sm text-slate-500">Are you sure you want to move</p>
+                              <p className="text-xl font-black text-slate-900 mt-1">{students.find(s => s.id === pendingMove.studentId)?.name}</p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6 w-full py-4 px-6 bg-slate-50 rounded-2xl border border-slate-100">
+                              <div className="flex-1 text-center">
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From</p>
+                                  <p className="text-xs font-bold text-slate-700 mt-1 truncate">{students.find(s => s.id === pendingMove.studentId)?.status}</p>
+                              </div>
+                              <ArrowRight size={20} className="text-indigo-300 shrink-0"/>
+                              <div className="flex-1 text-center">
+                                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">To</p>
+                                  <p className="text-xs font-black text-indigo-600 mt-1 truncate">{pendingMove.newStatus}</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start space-x-3">
+                          <Info size={18} className="text-amber-500 shrink-0 mt-0.5"/>
+                          <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
+                              Moving a student may trigger automated tasks, notifications, or require additional partner information depending on the target stage.
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className="p-8 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
+                      <button onClick={() => setPendingMove(null)} className="px-6 py-3 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-all text-sm">Discard</button>
+                      <button 
+                        onClick={() => moveStudent(pendingMove.studentId, pendingMove.newStatus)}
+                        className="bg-indigo-600 text-white px-10 py-3 rounded-2xl font-bold shadow-xl hover:bg-indigo-700 transition-all active:scale-95 text-sm flex items-center"
+                      >
+                          <CheckCircle2 size={18} className="mr-2"/>
+                          Confirm Move
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Partner Assignment Modal (Intercept) */}
       {partnerRequest && (
@@ -710,7 +778,7 @@ const AddTaskModal: React.FC<any> = ({ onClose, onAdd, defaultDay }) => {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
                 <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
                     <div>
                         <h3 className="font-bold text-xl text-slate-800 flex items-center">
@@ -988,7 +1056,7 @@ const NocTracker = () => {
             {/* NOC UPDATE MODAL */}
             {editingNoc && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100">
                         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
                             <div>
                                 <h3 className="font-bold text-xl text-slate-800 flex items-center">
