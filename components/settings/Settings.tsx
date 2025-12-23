@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X, Settings2 } from 'lucide-react';
+import { Save, Building, Mail, Phone, MapPin, Globe, Bell, Download, Trash2, CheckCircle2, RotateCw, Upload, Crown, Check, CreditCard, ShieldCheck, Star, Wallet, Loader2, MessageCircle, FileText, Magnet, GraduationCap, Network, Plus, X, Settings2, Lock, Sparkles, ArrowRight } from 'lucide-react';
 import { AgencySettings, Country, SubscriptionPlan, Branch } from '../../types';
 import { fetchSettings, saveSettings, fetchAllData, clearAllData, importData } from '../../services/storageService';
 import { LeadFormBuilder } from './LeadFormBuilder';
@@ -146,6 +146,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
     if (loading || !settings) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
 
     const currentPlan = settings.subscription?.plan || 'Free';
+    const isEnterprise = currentPlan === 'Enterprise';
 
     const PlanCard = ({ title, price, features, recommended, type }: { title: string, price: string, features: string[], recommended?: boolean, type: SubscriptionPlan }) => {
         const isActive = currentPlan === type;
@@ -226,6 +227,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                      >
                          <Magnet size={16} className="mr-2"/>
                          Lead Capture
+                         {!isEnterprise && <Lock size={12} className="ml-1.5 text-slate-400" />}
                          {activeTab === 'leads' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full"></div>}
                      </button>
                      <button 
@@ -286,7 +288,61 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                         </div>
                     </div>
                 ) : activeTab === 'leads' ? (
-                    <LeadFormBuilder onPreview={onOpenPublicForm || (() => {})} />
+                    isEnterprise ? (
+                        <LeadFormBuilder onPreview={onOpenPublicForm || (() => {})} />
+                    ) : (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
+                            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-12 text-center relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-12 opacity-5 text-indigo-600">
+                                    <Magnet size={240} />
+                                </div>
+                                
+                                <div className="relative z-10">
+                                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-sm border border-indigo-100">
+                                        <Crown size={40} />
+                                    </div>
+                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Enterprise Lead Capture</h2>
+                                    <p className="text-slate-500 text-lg mt-3 max-w-xl mx-auto leading-relaxed">
+                                        The whitelabeled student intake system is an **Enterprise feature**. Capture leads directly from your website, social media, and Instagram bio with custom branded forms.
+                                    </p>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mt-10 text-left">
+                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <Sparkles className="text-indigo-600 shrink-0 mt-1" size={18}/>
+                                            <p className="text-sm font-medium text-slate-600">Custom branded forms with your agency logo and colors.</p>
+                                        </div>
+                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <Globe className="text-indigo-600 shrink-0 mt-1" size={18}/>
+                                            <p className="text-sm font-medium text-slate-600">Iframe embed for WordPress, Wix, or your agency site.</p>
+                                        </div>
+                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <CheckCircle2 className="text-indigo-600 shrink-0 mt-1" size={18}/>
+                                            <p className="text-sm font-medium text-slate-600">Automated lead inbox integration in CRM.</p>
+                                        </div>
+                                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <ShieldCheck className="text-indigo-600 shrink-0 mt-1" size={18}/>
+                                            <p className="text-sm font-medium text-slate-600">Whitelabeling to remove all "Visa In Arc" branding.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+                                        <button 
+                                            onClick={() => setShowUpgradeModal('Enterprise')}
+                                            className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all flex items-center active:scale-95"
+                                        >
+                                            Upgrade to Enterprise <ArrowRight className="ml-2" size={16}/>
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab('general')}
+                                            className="text-slate-400 font-bold text-sm hover:text-slate-600 uppercase tracking-widest px-6 py-4"
+                                        >
+                                            Learn More
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
@@ -344,7 +400,7 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                                         type="Enterprise"
                                         title="Enterprise"
                                         price="Custom"
-                                        features={['Unlimited Users', 'Whitelabel Portal', 'Custom Domain', 'Dedicated Account Manager', 'API Access']}
+                                        features={['Unlimited Users', 'Whitelabel Portal', 'Custom Domain', 'Dedicated Account Manager', 'Lead Capture Engine']}
                                     />
                                 </div>
                             </div>

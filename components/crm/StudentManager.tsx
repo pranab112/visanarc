@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
-import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType } from '../../types';
+import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap, SearchCode } from 'lucide-react';
+import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType, AuditFinding } from '../../types';
 import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners } from '../../services/storageService';
 import { getCurrentUser } from '../../services/authService';
 import { uploadFile, deleteFile } from '../../services/fileStorageService';
@@ -11,8 +12,7 @@ import { runStatusAutomation } from '../../services/workflowService';
 import { generatePartnerBundle } from '../../services/bundleService';
 import { getRequiredDocuments, generateReceipt } from '../../services/documentService';
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
-// Added missing AI service imports
-import { analyzeVisaRisk, extractPassportData } from '../../services/geminiService';
+import { analyzeVisaRisk, extractPassportData, auditStudentCompliance } from '../../services/geminiService';
 
 /**
  * Optimized Student Card Component
@@ -79,6 +79,7 @@ export const StudentManager: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [analyzingRisk, setAnalyzingRisk] = useState(false);
   const [isBundling, setIsBundling] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
 
   // Financial States
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
@@ -311,7 +312,6 @@ export const StudentManager: React.FC = () => {
             Refusal Details: ${selectedStudent.borderDetails || 'None'}
             Financial Budget: ${selectedStudent.financialCap || 'Medium'}
         `;
-        // Using imported analyzeVisaRisk function
         const result = await analyzeVisaRisk(profile, selectedStudent.targetCountry);
         
         const updatedStudent = {
@@ -330,6 +330,36 @@ export const StudentManager: React.FC = () => {
         showToast("Failed to analyze visa risk", "error");
     } finally {
         setAnalyzingRisk(false);
+    }
+  };
+
+  const handleRunDocumentAudit = async () => {
+    if (!selectedStudent || isAuditing) return;
+    setIsAuditing(true);
+    try {
+        const profile = `Name: ${selectedStudent.name}, Country: ${selectedStudent.targetCountry}, Gap: ${selectedStudent.educationGap}, Refusals: ${selectedStudent.previousRefusals}, English: ${selectedStudent.testType} ${selectedStudent.testScore}`;
+        const uploadedDocs = Object.entries(selectedStudent.documents)
+            .filter(([_, status]) => status === 'Uploaded')
+            .map(([name]) => name);
+
+        const findings = await auditStudentCompliance(profile, uploadedDocs);
+        
+        const updatedStudent = {
+            ...selectedStudent,
+            documentAudit: {
+                date: Date.now(),
+                findings: findings
+            }
+        };
+
+        const updatedList = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+        await saveStudents(updatedList);
+        setStudents(updatedList);
+        showToast("AI Compliance Audit Finished.");
+    } catch (err) {
+        showToast("AI Audit Failed.", "error");
+    } finally {
+        setIsAuditing(false);
     }
   };
 
@@ -413,7 +443,6 @@ export const StudentManager: React.FC = () => {
           const reader = new FileReader();
           reader.onload = async (event) => {
               const base64Data = (event.target?.result as string).split(',')[1];
-              // Using imported extractPassportData function
               const result = await extractPassportData(base64Data, file.type);
               if (result) {
                   setNewStudentData(prev => ({
@@ -1130,40 +1159,97 @@ export const StudentManager: React.FC = () => {
                              </div>
                         </div>
 
-                        {/* PREMIUM LAUNCH BUNDLER CTA */}
-                        <div className={`p-8 rounded-[2.5rem] border-2 transition-all duration-500 flex flex-col md:flex-row items-center justify-between gap-6 mb-10 ${
-                            isFullyDocumented 
-                            ? 'bg-indigo-50 border-indigo-200 shadow-xl shadow-indigo-100 animate-pulse-subtle' 
-                            : 'bg-white border-slate-100 border-dashed opacity-75'
-                        }`}>
-                            <div className="flex items-center space-x-5">
-                                <div className={`p-5 rounded-[1.5rem] shadow-lg transition-all ${isFullyDocumented ? 'bg-indigo-600 text-white scale-110' : 'bg-slate-100 text-slate-300'}`}>
-                                    <Package size={32} />
-                                </div>
-                                <div>
-                                    <h3 className={`text-xl font-black tracking-tight ${isFullyDocumented ? 'text-slate-900' : 'text-slate-400'}`}>Launch Application Bundle</h3>
-                                    <p className="text-sm text-slate-500 font-medium mt-1">Renames, categorizes, and organizes all docs into a single ZIP for portal upload.</p>
-                                </div>
-                            </div>
-                            
-                            <div className="shrink-0">
-                                {isFullyDocumented ? (
-                                    <button 
-                                        onClick={handleDownloadBundle}
-                                        disabled={isBundling}
-                                        className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-600 transition-all flex items-center group active:scale-95"
-                                    >
-                                        {isBundling ? <Loader2 size={22} className="animate-spin mr-3" /> : <Download size={22} className="mr-3 group-hover:bounce" />}
-                                        {isBundling ? 'Compiling Package...' : 'Download Launch Ready ZIP'}
-                                    </button>
-                                ) : (
-                                    <div className="flex items-center space-x-3 px-8 py-5 bg-slate-50 rounded-[2rem] border border-slate-200 text-slate-400">
-                                        <Lock size={18} />
-                                        <span className="text-xs font-black uppercase tracking-widest">Locked: Needs 100% Upload</span>
+                        {/* PREMIUM AUDIT & LAUNCH TOOLS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                            {/* AI COMPLIANCE AUDITOR */}
+                            <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group hover:border-indigo-400 transition-all">
+                                <div className="flex items-center space-x-4 mb-4">
+                                    <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                        <SearchCode size={24} />
                                     </div>
-                                )}
+                                    <div>
+                                        <h3 className="font-black text-slate-800">AI Compliance Auditor</h3>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Scan for Inconsistencies</p>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500 leading-relaxed mb-6">Runs a deep check across profile data and documents to find errors or missing context (e.g. gaps without proof).</p>
+                                <button 
+                                    onClick={handleRunDocumentAudit}
+                                    disabled={isAuditing}
+                                    className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-600 hover:text-white transition-all active:scale-95 flex items-center justify-center"
+                                >
+                                    {isAuditing ? <Loader2 size={14} className="animate-spin mr-2"/> : <BrainCircuit size={14} className="mr-2"/>}
+                                    {isAuditing ? 'Auditing...' : 'Start Integrity Check'}
+                                </button>
+                            </div>
+
+                            {/* BUNDLER */}
+                            <div className={`p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col justify-between ${
+                                isFullyDocumented 
+                                ? 'bg-indigo-600 border-indigo-700 shadow-xl shadow-indigo-100 text-white' 
+                                : 'bg-slate-50 border-slate-200 opacity-75'
+                            }`}>
+                                <div>
+                                    <div className="flex items-center space-x-4 mb-4">
+                                        <div className={`p-4 rounded-2xl shadow-sm ${isFullyDocumented ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                            <Package size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black">Application Bundler</h3>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest ${isFullyDocumented ? 'text-indigo-200' : 'text-slate-400'}`}>Ready for Export</p>
+                                        </div>
+                                    </div>
+                                    <p className={`text-xs leading-relaxed mb-6 ${isFullyDocumented ? 'text-indigo-100' : 'text-slate-400'}`}>Compiles all verified documents into a professional ZIP file for portal submission.</p>
+                                </div>
+                                
+                                <button 
+                                    onClick={handleDownloadBundle}
+                                    disabled={!isFullyDocumented || isBundling}
+                                    className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center ${
+                                        isFullyDocumented 
+                                        ? 'bg-white text-indigo-900 hover:bg-indigo-50 shadow-lg' 
+                                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    }`}
+                                >
+                                    {isBundling ? <Loader2 size={14} className="animate-spin mr-2" /> : <Download size={14} className="mr-2" />}
+                                    {isBundling ? 'Compiling...' : 'Export ZIP Bundle'}
+                                </button>
                             </div>
                         </div>
+
+                        {/* AI Audit Findings Display */}
+                        {selectedStudent.documentAudit && (
+                            <div className="animate-in slide-in-from-top-4 duration-500 mb-10">
+                                <div className="flex items-center justify-between px-2 mb-4">
+                                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-[0.1em] flex items-center">
+                                        <ShieldCheck className="mr-2 text-indigo-600" size={18}/> Compliance Findings Report
+                                    </h4>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Last Run: {new Date(selectedStudent.documentAudit.date).toLocaleTimeString()}</span>
+                                </div>
+                                <div className="bg-slate-900 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
+                                    {selectedStudent.documentAudit.findings.map((finding, i) => (
+                                        <div key={i} className={`flex items-start space-x-4 p-4 rounded-2xl border ${
+                                            finding.type === 'Critical' ? 'bg-rose-500/10 border-rose-500/20 text-rose-200' :
+                                            finding.type === 'Warning' ? 'bg-amber-500/10 border-amber-500/20 text-amber-200' :
+                                            'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
+                                        }`}>
+                                            <div className="shrink-0 mt-0.5">
+                                                {finding.type === 'Critical' ? <AlertTriangle size={18}/> : finding.type === 'Warning' ? <Info size={18}/> : <CheckCircle2 size={18}/>}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{finding.category}</p>
+                                                <p className="text-sm font-medium mt-1">{finding.message}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {selectedStudent.documentAudit.findings.length === 0 && (
+                                        <div className="py-8 text-center text-slate-500 italic">
+                                            No compliance issues found. The file looks perfect!
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Document Categories */}
                         <div className="space-y-8 pb-20">

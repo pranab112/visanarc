@@ -99,6 +99,12 @@ export interface NoteEntry {
     isPinned?: boolean;
 }
 
+export interface AuditFinding {
+    type: 'Critical' | 'Warning' | 'Verified';
+    message: string;
+    category: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -163,6 +169,12 @@ export interface Student {
   riskAnalysis?: {
       date: number;
       result: string;
+  };
+  
+  // New: Document Consistency Audit
+  documentAudit?: {
+      date: number;
+      findings: AuditFinding[];
   };
 
   // Test Prep Centre Info

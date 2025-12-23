@@ -86,6 +86,59 @@ export const analyzeVisaRisk = async (
   }
 };
 
+/**
+ * AI Auditor: Scans profile and document list for potential errors and consistency issues.
+ */
+export const auditStudentCompliance = async (
+  profile: string,
+  uploadedDocs: string[]
+): Promise<any[]> => {
+  try {
+    const prompt = `Act as a strict compliance auditor for a study abroad agency. Review the student's profile and the list of documents they have actually uploaded.
+    
+    Student Profile:
+    ${profile}
+
+    Uploaded Documents:
+    ${uploadedDocs.length > 0 ? uploadedDocs.join(', ') : 'NONE'}
+
+    Identify:
+    1. Consistency Errors: (e.g. Profile mentions a 3-year gap but no 'Experience Certificate' or 'Gap Explanation' is in the document list).
+    2. Critical Missing Files: Documents mandatory for this profile that are missing.
+    3. Expiry Warnings: (e.g. Passport or Test score might be near expiry based on current date).
+    
+    Return a list of findings. Each finding must have a type (Critical, Warning, Verified), a category, and a message.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, enum: ["Critical", "Warning", "Verified"] },
+              category: { type: Type.STRING },
+              message: { type: Type.STRING }
+            },
+            required: ["type", "category", "message"]
+          }
+        }
+      }
+    });
+
+    if (response.text) {
+        return JSON.parse(response.text);
+    }
+    return [];
+  } catch (error) {
+    console.error("Gemini Audit Error:", error);
+    return [{ type: 'Warning', category: 'System', message: 'Could not complete AI audit at this time.' }];
+  }
+};
+
 export const getInterviewQuestion = async (context: string): Promise<string> => {
     try {
         const prompt = `You are a strict visa officer for ${context}. Ask me one difficult interview question regarding my study plan or finances. Only return the question text.`;
