@@ -1,5 +1,5 @@
 
-import { Student, Partner, Invoice, Task, AgencySettings, CommissionClaim, Expense, Country } from '../types';
+import { Student, Partner, Invoice, Task, AgencySettings, CommissionClaim, Expense, Country, SubscriptionPlan } from '../types';
 import { getCurrentUser } from './authService';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { MOCK_STUDENTS_INITIAL, MOCK_PARTNERS_INITIAL, MOCK_EXPENSES_INITIAL } from '../constants';
@@ -7,6 +7,18 @@ import { MOCK_STUDENTS_INITIAL, MOCK_PARTNERS_INITIAL, MOCK_EXPENSES_INITIAL } f
 const getAgencyId = () => {
     const user = getCurrentUser();
     return user ? user.agencyId : 'local-dev-agency';
+};
+
+/**
+ * Returns the maximum number of students allowed for a given plan.
+ */
+export const getPlanLimit = (plan: SubscriptionPlan): number => {
+    switch (plan) {
+        case 'Free': return 10;
+        case 'Pro': return 50; // Updated from 10,000 to 50
+        case 'Enterprise': return Infinity;
+        default: return 10;
+    }
 };
 
 // Generic Fetcher
@@ -122,7 +134,6 @@ export const fetchExpenses = async (): Promise<Expense[]> =>
 
 export const saveExpenses = async (expenses: Expense[]): Promise<void> => {
     saveTable('expenses', expenses, (ex: Expense, agencyId: string) => ({
-        // Fix: Changed ex.recorded_by to ex.recordedBy to match the Expense interface
         id: ex.id, agency_id: agencyId, category: ex.category, amount: ex.amount, description: ex.description, date: ex.date, recorded_by: ex.recordedBy, data: ex
     }));
 };

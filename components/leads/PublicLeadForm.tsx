@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AgencySettings, Student, ApplicationStatus, NocStatus, Country } from '../../types';
-import { fetchSettings, fetchStudents, saveStudents } from '../../services/storageService';
-import { Loader2, CheckCircle2, Globe, Send, ArrowLeft } from 'lucide-react';
+import { fetchSettings, fetchStudents, saveStudents, getPlanLimit } from '../../services/storageService';
+import { Loader2, CheckCircle2, Globe, Send, ArrowLeft, ShieldAlert } from 'lucide-react';
 
 interface PublicLeadFormProps {
     onClose?: () => void;
@@ -10,6 +10,7 @@ interface PublicLeadFormProps {
 
 export const PublicLeadForm: React.FC<PublicLeadFormProps> = ({ onClose }) => {
     const [settings, setSettings] = useState<AgencySettings | null>(null);
+    const [currentStudents, setCurrentStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [completed, setCompleted] = useState(false);
@@ -26,22 +27,32 @@ export const PublicLeadForm: React.FC<PublicLeadFormProps> = ({ onClose }) => {
 
     useEffect(() => {
         const load = async () => {
-            const s = await fetchSettings();
+            const [s, st] = await Promise.all([fetchSettings(), fetchStudents()]);
             setSettings(s);
+            setCurrentStudents(st);
             setLoading(false);
         };
         load();
     }, []);
 
+    const planLimit = useMemo(() => settings ? getPlanLimit(settings.subscription.plan) : 0, [settings]);
+    const isQuotaFull = useMemo(() => currentStudents.length >= planLimit, [currentStudents, planLimit]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Quota safety check
+        if (isQuotaFull) {
+            alert("This agency has reached its student intake capacity. Please contact them directly.");
+            return;
+        }
+
         setSubmitting(true);
 
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         try {
-            const currentStudents = await fetchStudents();
             const newStudent: Student = {
                 id: Date.now().toString(),
                 name: formData.name,
@@ -68,7 +79,7 @@ export const PublicLeadForm: React.FC<PublicLeadFormProps> = ({ onClose }) => {
         }
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>;
     
     // Safety check if settings missing or form disabled
     if (!settings || !settings.leadForm?.enabled) {
@@ -78,6 +89,28 @@ export const PublicLeadForm: React.FC<PublicLeadFormProps> = ({ onClose }) => {
                     <Globe size={48} className="mx-auto text-slate-300 mb-4" />
                     <h1 className="text-xl font-bold text-slate-800">Form Unavailable</h1>
                     <p className="text-slate-500 mt-2">This intake form is currently disabled or does not exist.</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Quota Full View
+    if (isQuotaFull) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl text-center max-w-lg border border-slate-100">
+                    <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-rose-600 shadow-inner">
+                        <ShieldAlert size={40} />
+                    </div>
+                    <h1 className="text-2xl font-black text-slate-900 mb-2 uppercase tracking-tight">Intake Temporarily Suspended</h1>
+                    <p className="text-slate-500 mb-8 leading-relaxed">We have reached our maximum applicant capacity for the current term. Please try again later or contact our Head Office directly for priority processing.</p>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Agency Contact</p>
+                        <p className="text-sm font-bold text-slate-700 mt-1">{settings.email} • {settings.phone}</p>
+                    </div>
+                    {onClose && (
+                        <button onClick={onClose} className="text-sm font-bold text-indigo-600 hover:underline">Return to Dashboard</button>
+                    )}
                 </div>
             </div>
         );

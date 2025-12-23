@@ -365,13 +365,13 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                                         title="Agency Pro"
                                         price="Rs. 5,000"
                                         recommended={true}
-                                        features={['5 User Accounts', 'Unlimited Students', 'Full AI Tools Suite', 'Email Automation', 'Priority Support']}
+                                        features={['5 User Accounts', 'Max 50 Students', 'Full AI Tools Suite', 'Email Automation', 'Priority Support']}
                                     />
                                     <PlanCard 
                                         type="Enterprise"
                                         title="Enterprise"
                                         price="Custom"
-                                        features={['Unlimited Users', 'Whitelabel Portal', 'Custom Domain', 'Dedicated Account Manager', 'Lead Capture Engine']}
+                                        features={['Unlimited Students', 'Unlimited Users', 'Whitelabel Portal', 'Custom Domain', 'Dedicated Account Manager', 'Lead Capture Engine']}
                                     />
                                 </div>
                             </div>
@@ -429,26 +429,18 @@ export const Settings: React.FC<SettingsProps> = ({ onOpenPublicForm }) => {
                         {/* Right Column: Data Management */}
                         <div className="space-y-6">
                             {isOwner && (
-                                <>
-                                    <div className="bg-indigo-900 text-white rounded-2xl shadow-xl p-6 relative overflow-hidden">
-                                        <div className="relative z-10">
-                                            <h3 className="font-bold text-lg mb-2">Data Management</h3>
-                                            <p className="text-indigo-200 text-sm mb-6">Backup or restore your data safely.</p>
-                                            <div className="space-y-3">
-                                                <button onClick={handleExport} className="w-full bg-white text-indigo-900 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-50 transition-colors"><Download size={18} className="mr-2"/> Export Data</button>
-                                                <button onClick={handleImportClick} className="w-full bg-indigo-800 text-white border border-indigo-700 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors"><Upload size={18} className="mr-2"/> Import Data</button>
-                                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
-                                            </div>
+                                <div className="bg-indigo-900 text-white rounded-2xl shadow-xl p-6 relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <h3 className="font-bold text-lg mb-2">Data Management</h3>
+                                        <p className="text-indigo-200 text-sm mb-6">Backup or restore your data safely.</p>
+                                        <div className="space-y-3">
+                                            <button onClick={handleExport} className="w-full bg-white text-indigo-900 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-50 transition-colors"><Download size={18} className="mr-2"/> Export Data</button>
+                                            <button onClick={handleImportClick} className="w-full bg-indigo-800 text-white border border-indigo-700 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors"><Upload size={18} className="mr-2"/> Import Data</button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json" />
                                         </div>
-                                        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Download size={120} /></div>
                                     </div>
-
-                                    <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 relative overflow-hidden">
-                                        <h3 className="font-bold text-red-900 mb-2 flex items-center"><Trash2 size={18} className="mr-2"/> Danger Zone</h3>
-                                        <p className="text-slate-500 text-xs mb-6">Irreversible actions. Proceed with caution.</p>
-                                        <button onClick={handleReset} className="w-full bg-red-50 text-red-600 border border-red-100 font-bold py-3 px-4 rounded-xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">Reset Application</button>
-                                    </div>
-                                </>
+                                    <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Download size={120} /></div>
+                                </div>
                             )}
 
                             <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 text-center">

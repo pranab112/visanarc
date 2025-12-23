@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap, SearchCode } from 'lucide-react';
+import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ArrowRight, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap, SearchCode, Crown, Info as InfoIcon } from 'lucide-react';
 import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType, AuditFinding } from '../../types';
-import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners } from '../../services/storageService';
+import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners, getPlanLimit } from '../../services/storageService';
 import { getCurrentUser } from '../../services/authService';
 import { uploadFile, deleteFile } from '../../services/fileStorageService';
 import { DocRequirement } from '../../constants';
@@ -72,6 +72,7 @@ export const StudentManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'documents' | 'notes' | 'profile' | 'financials' | 'risk'>('documents');
   
   const [isAdding, setIsAdding] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -157,6 +158,11 @@ export const StudentManager: React.FC = () => {
     };
     init();
   }, []);
+
+  // Subscription Limit Calculation
+  const planLimit = useMemo(() => getPlanLimit(settings?.subscription?.plan || 'Free'), [settings]);
+  const isLimitReached = useMemo(() => students.length >= planLimit, [students, planLimit]);
+  const capacityPercentage = useMemo(() => Math.min((students.length / planLimit) * 100, 100), [students, planLimit]);
 
   // Update container height on resize
   useEffect(() => {
@@ -381,6 +387,13 @@ export const StudentManager: React.FC = () => {
   }, [selectedStudent]);
 
   const handleAddStudent = async () => {
+    // ENFORCE QUOTA LIMIT
+    if (isLimitReached) {
+        setShowLimitModal(true);
+        setIsAdding(false);
+        return;
+    }
+
     if (!newStudentData.name || !newStudentData.branchId || !newStudentData.intakeMonth || !newStudentData.highestQualification) {
         showToast("Please fill all mandatory fields (marked with *)", "error");
         return;
@@ -463,7 +476,7 @@ export const StudentManager: React.FC = () => {
           showToast("OCR Error: Could not read passport image.", "error");
       } finally {
           setScanningPassport(false);
-          e.target.value = '';
+          e.value = '';
       }
   };
 
@@ -692,9 +705,30 @@ export const StudentManager: React.FC = () => {
       {/* List View */}
       <div className={`w-full flex flex-col bg-white ${selectedStudentId ? 'hidden' : 'flex'}`}>
         <div className="p-6 border-b border-slate-100 space-y-4 max-w-7xl mx-auto w-full">
-          <div className="flex justify-between items-center">
-             <h1 className="text-2xl font-bold text-slate-900">Student Manager</h1>
-             <button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center shadow-md transition-all active:scale-95"><Plus size={18} className="mr-2" /> Add Student</button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+             <div>
+                <h1 className="text-2xl font-bold text-slate-900">Student Manager</h1>
+                <div className="flex items-center mt-2 space-x-3">
+                    <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                        <div 
+                            className={`h-full transition-all duration-1000 ${isLimitReached ? 'bg-rose-500' : 'bg-indigo-500'}`} 
+                            style={{ width: `${capacityPercentage}%` }} 
+                        />
+                    </div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        {students.length} / {planLimit === Infinity ? 'Unlimited' : planLimit} Profile Slots
+                    </span>
+                </div>
+             </div>
+             <button 
+                onClick={() => isLimitReached ? setShowLimitModal(true) : setIsAdding(true)} 
+                className={`px-4 py-2 rounded-xl flex items-center shadow-md transition-all active:scale-95 font-bold text-sm ${
+                    isLimitReached ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+             >
+                 {isLimitReached ? <Crown size={16} className="mr-2" /> : <Plus size={18} className="mr-2" />}
+                 {isLimitReached ? 'Plan Limit Reached' : 'Add Student'}
+             </button>
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
              <div className="relative flex-1">
@@ -1316,8 +1350,6 @@ export const StudentManager: React.FC = () => {
                                              <th className="px-8 py-4">Invoice #</th>
                                              <th className="px-8 py-4">Description</th>
                                              <th className="px-8 py-4">Amount</th>
-                                             <th className="px-8 py-4">Date</th>
-                                             <th className="px-8 py-4">Status</th>
                                              <th className="px-8 py-4 text-right">Actions</th>
                                          </tr>
                                      </thead>
@@ -1327,19 +1359,6 @@ export const StudentManager: React.FC = () => {
                                                  <td className="px-8 py-5 font-mono text-xs font-bold text-indigo-600">{inv.invoiceNumber}</td>
                                                  <td className="px-8 py-5 text-sm font-medium text-slate-700">{inv.description}</td>
                                                  <td className="px-8 py-5 text-sm font-black text-slate-900">{currencySymbol} {inv.amount.toLocaleString()}</td>
-                                                 <td className="px-8 py-5 text-xs text-slate-400 font-medium">{new Date(inv.date).toLocaleDateString()}</td>
-                                                 <td className="px-8 py-5">
-                                                     <button 
-                                                        onClick={() => handleToggleInvoiceStatus(inv.id)}
-                                                        className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
-                                                            inv.status === 'Paid' 
-                                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                                            : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100'
-                                                        }`}
-                                                     >
-                                                         {inv.status}
-                                                     </button>
-                                                 </td>
                                                  <td className="px-8 py-5 text-right space-x-2">
                                                      <button 
                                                         onClick={() => generateReceipt(inv, settings)}
@@ -1356,12 +1375,6 @@ export const StudentManager: React.FC = () => {
                                                  <td colSpan={6} className="px-8 py-20 text-center text-slate-300">
                                                      <Receipt size={48} className="mx-auto mb-2 opacity-10"/>
                                                      <p className="font-bold">No invoices generated for this student.</p>
-                                                     <button 
-                                                        onClick={() => setIsCreatingInvoice(true)}
-                                                        className="text-indigo-600 text-xs font-bold underline mt-2"
-                                                     >
-                                                         Create the first one
-                                                     </button>
                                                  </td>
                                              </tr>
                                          )}
@@ -1419,31 +1432,11 @@ export const StudentManager: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Filter & Search */}
-                        <div className="flex justify-between items-center px-2">
-                            <div className="flex space-x-2 overflow-x-auto pb-1">
-                                {(['All', 'General', 'Counselling', 'FollowUp', 'Warning', 'Financial'] as const).map(f => (
-                                    <button 
-                                        key={f} 
-                                        onClick={() => setNoteFilter(f)}
-                                        className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
-                                            noteFilter === f 
-                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                                            : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'
-                                        }`}
-                                    >
-                                        {f}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Note Timeline */}
                         <div className="relative pl-8 space-y-6">
                             <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-slate-200"></div>
                             
                             {(selectedStudent.noteEntries || [])
-                                .filter(n => noteFilter === 'All' || n.type === noteFilter)
                                 .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0) || b.timestamp - a.timestamp)
                                 .map(note => {
                                     const styles = getNoteTypeStyles(note.type);
@@ -1496,13 +1489,58 @@ export const StudentManager: React.FC = () => {
                                 <div className="py-20 text-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200">
                                     <Info size={48} className="mx-auto mb-4 opacity-20"/>
                                     <p className="font-bold">No entries in timeline yet.</p>
-                                    <p className="text-xs">Notes are private to consultants and will not be seen by students.</p>
                                 </div>
                             )}
                         </div>
                     </div>
                  )}
              </div>
+          </div>
+      )}
+
+      {/* LIMIT REACHED MODAL */}
+      {showLimitModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+              <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 border border-slate-100">
+                  <div className="p-10 bg-rose-600 text-white text-center relative overflow-hidden">
+                      <div className="relative z-10">
+                        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                            <ShieldAlert size={32} className="text-white" />
+                        </div>
+                        <h2 className="text-2xl font-black tracking-tight">Capacity Limit Reached</h2>
+                        <p className="text-rose-100 mt-2 font-medium">Your current plan quota is fully utilized.</p>
+                      </div>
+                      <Crown size={150} className="absolute -bottom-10 -right-10 text-white/5" />
+                  </div>
+                  <div className="p-10 space-y-6">
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                          <p className="text-sm text-slate-600 leading-relaxed">
+                              You have reached the limit of <strong>{planLimit} students</strong> for your <strong>{settings?.subscription.plan}</strong> plan. New profiles cannot be created until the plan is upgraded.
+                          </p>
+                      </div>
+                      <div className="space-y-3">
+                          <div className="flex items-center space-x-3 text-emerald-600">
+                              <CheckCircle2 size={18}/>
+                              <span className="text-sm font-bold">Expanded Student Profile Capacity</span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-emerald-600">
+                              <CheckCircle2 size={18}/>
+                              <span className="text-sm font-bold">Advanced AI Documentation Audit</span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-emerald-600">
+                              <CheckCircle2 size={18}/>
+                              <span className="text-sm font-bold">Full Intelligence Analytics Suite</span>
+                          </div>
+                      </div>
+                      <button 
+                        onClick={() => { setShowLimitModal(false); /* Logic to navigate to settings or show upgrade */ }}
+                        className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-600 transition-all flex items-center justify-center"
+                      >
+                          Upgrade Plan Now <ArrowRight size={18} className="ml-3" />
+                      </button>
+                      <button onClick={() => setShowLimitModal(false)} className="w-full py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">Close</button>
+                  </div>
+              </div>
           </div>
       )}
 
@@ -1551,14 +1589,6 @@ export const StudentManager: React.FC = () => {
                               <option value="Other / Misc">Other / Misc</option>
                           </select>
                       </div>
-                      
-                      {newInvoiceDesc === 'Other / Misc' && (
-                          <input 
-                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white text-sm" 
-                            placeholder="Specify other service..." 
-                            onChange={e => setNewInvoiceDesc(e.target.value)}
-                          />
-                      )}
                   </div>
 
                   <div className="p-8 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
@@ -1591,6 +1621,14 @@ export const StudentManager: React.FC = () => {
                   </div>
                   
                   <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+                      {/* Capacity Warning */}
+                      {students.length >= planLimit - 2 && (
+                          <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center space-x-3 text-amber-800">
+                              <InfoIcon size={20} />
+                              <p className="text-sm font-bold">You are approaching your plan limit. Only {planLimit - students.length} slots remaining.</p>
+                          </div>
+                      )}
+
                       {/* AI & Branch Assignment */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <section>
@@ -1628,7 +1666,7 @@ export const StudentManager: React.FC = () => {
                         </section>
                       </div>
 
-                      {/* Section: Basic Identity */}
+                      {/* Identity Section */}
                       <section className="space-y-6">
                           <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><User size={16} className="mr-2"/> Identity & Contact</h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1647,7 +1685,7 @@ export const StudentManager: React.FC = () => {
                           </div>
                       </section>
 
-                      {/* Section: Intake Timeline & Tuition */}
+                      {/* Intake Timeline & Tuition */}
                       <section className="space-y-6">
                           <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><Clock size={16} className="mr-2"/> Intake & Financials</h4>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1673,7 +1711,7 @@ export const StudentManager: React.FC = () => {
                           </div>
                       </section>
 
-                      {/* Section: Academic Background */}
+                      {/* Academic Background */}
                       <section className="space-y-6">
                           <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><AcademicIcon size={16} className="mr-2"/> Academic & English</h4>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1703,33 +1741,6 @@ export const StudentManager: React.FC = () => {
                               <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Current Score</label>
                                   <input className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.testScore} onChange={e => setNewStudentData({...newStudentData, testScore: e.target.value})} placeholder="e.g. 7.0 or 65" />
-                              </div>
-                          </div>
-                      </section>
-
-                      {/* Section: Passport & Target */}
-                      <section className="space-y-6">
-                          <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><Globe size={16} className="mr-2"/> Passport & Target</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Passport Number</label>
-                                  <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-mono uppercase" value={newStudentData.passportNumber} onChange={e => setNewStudentData({...newStudentData, passportNumber: e.target.value})} placeholder="X0000000" />
-                              </div>
-                              <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Desired Country</label>
-                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold" value={newStudentData.targetCountry} onChange={e => setNewStudentData({...newStudentData, targetCountry: e.target.value as Country})}>
-                                      {Object.values(Country).map(c => <option key={c} value={c}>{c}</option>)}
-                                  </select>
-                              </div>
-                              <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Lead Source</label>
-                                  <select className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" value={newStudentData.source} onChange={e => setNewStudentData({...newStudentData, source: e.target.value})}>
-                                      <option value="Walk-in">Walk-in</option>
-                                      <option value="Referral">Referral</option>
-                                      <option value="Facebook Ads">Facebook Ads</option>
-                                      <option value="Instagram">Instagram</option>
-                                      <option value="Website">Website Form</option>
-                                  </select>
                               </div>
                           </div>
                       </section>
