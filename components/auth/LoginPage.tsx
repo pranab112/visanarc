@@ -1,6 +1,5 @@
-
-import React, { useState } from 'react';
-import { Mail, Lock, Building, ArrowRight, Loader2, Globe, Key, ShieldCheck, CheckCircle2, User, Copy, ClipboardCheck, Sparkles, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, Building, ArrowRight, Loader2, Globe, Key, ShieldCheck, CheckCircle2, User, Copy, ClipboardCheck, Sparkles, MessageCircle, Info } from 'lucide-react';
 import { login, registerAgency } from '../../services/authService';
 import { User as UserType } from '../../types';
 
@@ -21,6 +20,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     // Registration Success State
     const [regSuccess, setRegSuccess] = useState<{ owner: UserType, staff: { email: string, pass: string } } | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') === 'onboarding') {
+            setMode('register');
+        }
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,6 +60,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
     const handleProceedToApp = () => {
         if (!regSuccess) return;
+        // Clean URL to remove onboarding flag
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mode');
+        window.history.replaceState({}, '', url.toString());
+        
         localStorage.setItem('sag_current_user', JSON.stringify(regSuccess.owner));
         onLoginSuccess();
     };
@@ -76,7 +87,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     <div className="p-10 space-y-8">
                         <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-start space-x-3">
                             <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20}/>
-                            <p className="text-sm text-emerald-800 font-medium">Your workspace is ready. We've auto-created a staff account for your team.</p>
+                            <p className="text-sm text-emerald-800 font-medium">Your workspace is ready. Master Registry has been updated with your agency ID.</p>
                         </div>
 
                         <div className="space-y-4">
@@ -127,7 +138,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                              >
                                  Proceed to Dashboard <ArrowRight size={18} className="ml-3" />
                              </button>
-                             <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-6">Share these credentials with your counsellors.</p>
+                             <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-6">Share these credentials with your team.</p>
                         </div>
                     </div>
                 </div>
@@ -145,7 +156,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <p className="text-slate-500 mt-2 font-medium">Enterprise CRM & Intelligence Platform</p>
             </div>
 
-            <div className="bg-white w-full max-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
                 <div className="flex border-b border-slate-100 bg-slate-50/50">
                     <button 
                         onClick={() => setMode('login')}
@@ -168,27 +179,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                                 <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center">
                                     <ShieldCheck size={14} className="mr-2"/> Secure Registration
                                 </p>
-                                <p className="text-[11px] text-indigo-400 mt-1">Initialize your dedicated agency workspace.</p>
+                                <p className="text-[11px] text-indigo-400 mt-1">This will record a new agency in the Master Registry.</p>
                              </div>
 
                              <div className="grid grid-cols-1 gap-5">
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Principal Consultant Name</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Consultant Name</label>
                                     <input 
                                         className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-400 outline-none transition-all font-bold text-sm"
-                                        placeholder="Full Name"
+                                        placeholder="Principal Name"
                                         value={fullName}
                                         onChange={e => setFullName(e.target.value)}
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Legal Agency Name</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Agency Name</label>
                                     <div className="relative">
                                         <Building className="absolute left-4 top-4 text-slate-300" size={18}/>
                                         <input 
                                             className="w-full pl-12 pr-4 py-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-400 outline-none transition-all font-bold text-sm"
-                                            placeholder="e.g. Global Education Pvt. Ltd."
+                                            placeholder="e.g. Global Studies Pvt. Ltd."
                                             value={agencyName}
                                             onChange={e => setAgencyName(e.target.value)}
                                             required
@@ -196,29 +207,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                                     </div>
                                 </div>
                              </div>
-
-                             <div className="pt-2">
-                                <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 ml-1 flex items-center">
-                                    <Key size={12} className="mr-1.5"/> Pre-Paid Activation Key (Optional)
-                                </label>
-                                <input 
-                                    className="w-full p-4 border border-indigo-100 rounded-2xl bg-indigo-50/30 focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-400 outline-none transition-all font-mono text-xs uppercase placeholder:font-sans placeholder:text-slate-300"
-                                    placeholder="Enter key if you have already paid"
-                                    value={activationKey}
-                                    onChange={e => setActivationKey(e.target.value.toUpperCase())}
-                                />
-                                {activationKey.length > 5 && (
-                                    <p className="text-[9px] text-emerald-600 font-bold mt-2 flex items-center">
-                                        <CheckCircle2 size={12} className="mr-1"/> Verification will occur during setup
-                                    </p>
-                                )}
-                             </div>
                         </div>
                     )}
 
                     <div className="space-y-5">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Work Email</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-4 text-slate-300" size={18}/>
                                 <input 
@@ -262,27 +256,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     >
                         {loading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
-                                <span>{mode === 'login' ? 'Enter Workspace' : 'Initialize Agency'}</span>
+                                <span>{mode === 'login' ? 'Enter Workspace' : 'Begin Onboarding'}</span>
                                 <ArrowRight size={18} className="ml-3" />
                             </>
                         )}
                     </button>
-                    
-                    {mode === 'login' && (
-                        <div className="text-center">
-                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Authorized Access Only</p>
-                        </div>
-                    )}
                 </form>
             </div>
             
             <div className="mt-12 text-center space-y-2 opacity-50">
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">© 2025 GTSDevs. Built for SMM84 Excellence.</p>
-                <div className="flex justify-center space-x-4">
-                    <span className="text-[9px] text-slate-400 font-medium">Privacy Policy</span>
-                    <span className="text-[9px] text-slate-400 font-medium">Terms of Service</span>
-                    <span className="text-[9px] text-slate-400 font-medium">Cloud Status: Active</span>
-                </div>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">© 2025 GTSDevs. Infrastructure Verified.</p>
             </div>
         </div>
     );

@@ -11,6 +11,7 @@ import { ActivityLogs } from './components/activity/ActivityLogs';
 import { LoginPage } from './components/auth/LoginPage';
 import { PublicLeadForm } from './components/leads/PublicLeadForm';
 import { StudentPortal } from './components/portal/StudentPortal';
+import { LicensingGuard } from './components/security/LicensingGuard';
 import { getCurrentUser, initAuthListener } from './services/authService';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
@@ -21,15 +22,23 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-      // Check for public form mode in URL
       const params = new URLSearchParams(window.location.search);
+      
+      // 1. Check for public form mode
       if (params.get('mode') === 'public-form') {
           setActiveTab('public-form');
           setLoading(false);
           return;
       }
 
-      // Initialize Auth Listener (Mock or Real)
+      // 2. Check for onboarding test mode (forces login page to register tab)
+      if (params.get('mode') === 'onboarding') {
+          setUser(null);
+          setLoading(false);
+          return;
+      }
+
+      // Initialize Auth Listener
       const unsubscribe = initAuthListener((fetchedUser) => {
           setUser(fetchedUser);
           setLoading(false);
@@ -39,7 +48,6 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = () => {
-      // For Mock Auth, we need to manually update state because there's no real-time listener
       const currentUser = getCurrentUser();
       setUser(currentUser);
   };
@@ -73,29 +81,22 @@ export default function App() {
       return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>;
   }
 
-  // Special Case: Public Form does not require login or sidebar
-  if (activeTab === 'public-form') {
-      return renderContent();
-  }
-
-  if (!user) {
-      return <LoginPage onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  // --- SECURITY: STUDENT PORTAL ---
-  if (user.role === 'Student') {
-      return (
-        <StudentPortal studentId={user.id} />
-      );
-  }
-
-  // --- AGENT DASHBOARD ---
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="ml-64 flex-1 p-0 h-screen overflow-hidden">
-        {renderContent()}
-      </main>
-    </div>
+    <LicensingGuard>
+      {activeTab === 'public-form' ? (
+        renderContent()
+      ) : !user ? (
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
+      ) : user.role === 'Student' ? (
+        <StudentPortal studentId={user.id} />
+      ) : (
+        <div className="min-h-screen bg-slate-50 flex">
+          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+          <main className="ml-64 flex-1 p-0 h-screen overflow-hidden">
+            {renderContent()}
+          </main>
+        </div>
+      )}
+    </LicensingGuard>
   );
 }

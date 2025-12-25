@@ -1,6 +1,7 @@
 
+import { isSupabaseConfigured } from '../services/supabaseClient';
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X, Magnet } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X, Magnet, Cloud, CloudOff, ShieldCheck } from 'lucide-react';
 import { fetchSettings } from '../services/storageService';
 import { getCurrentUser, logout } from '../services/authService';
 import { AgencySettings, User } from '../types';
@@ -139,6 +140,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       </nav>
 
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+        {/* CONNECTION STATUS BADGE */}
+        <div className={`mb-4 px-4 py-2 rounded-xl border flex items-center space-x-3 transition-all ${
+            isSupabaseConfigured 
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+        }`}>
+            {isSupabaseConfigured ? <Cloud size={16} className="animate-pulse" /> : <CloudOff size={16} />}
+            <div className="flex-1">
+                <p className="text-[10px] font-black uppercase tracking-widest leading-none">
+                    {isSupabaseConfigured ? 'Cloud Sync' : 'Local Mode'}
+                </p>
+                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">
+                    {isSupabaseConfigured ? 'Production Live' : 'Offline Storage'}
+                </p>
+            </div>
+            {isSupabaseConfigured && <ShieldCheck size={14} className="text-emerald-500" />}
+        </div>
+
         <button 
             onClick={() => { setActiveTab('settings'); setIsOpen(false); }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all mb-2 ${
@@ -158,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
         
         <div className="mt-4 text-center border-t border-slate-800 pt-3">
-            <span className="text-[10px] text-slate-600 font-mono block">v3.0-H2-STABLE</span>
+            <span className="text-[10px] text-slate-600 font-mono block">v3.0-H5-STABLE</span>
             <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Property of SMM84.</span>
         </div>
     </div>

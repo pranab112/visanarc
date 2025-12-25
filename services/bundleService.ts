@@ -3,12 +3,6 @@ import { jsPDF } from 'jspdf';
 import { Student } from '../types';
 import { UNIVERSAL_DOCS, COUNTRY_SPECIFIC_DOCS } from '../constants';
 
-// Helper to fetch Blob from Blob URL or remote URL
-const fetchFileBlob = async (url: string): Promise<Blob> => {
-    const response = await fetch(url);
-    return await response.blob();
-};
-
 const getFileExtension = (filename: string): string => {
     return filename.slice((Math.max(0, filename.lastIndexOf(".")) || Infinity) + 1);
 };
@@ -76,27 +70,21 @@ export const generatePartnerBundle = async (student: Student, agencyName: string
     folder.file("00_Student_Summary.pdf", pdfBlob);
 
     // 2. PROCESS AND RENAME DOCUMENTS
-    // Merge all requirements to find categories
     const allDocsRequirements = [...UNIVERSAL_DOCS, ...(COUNTRY_SPECIFIC_DOCS[student.targetCountry] || [])];
 
     if (student.documentFiles) {
         for (const [docName, fileData] of Object.entries(student.documentFiles)) {
-            // Handle both legacy string format and new object format
             const fileUrl = typeof fileData === 'string' ? '' : fileData.url; 
             const originalName = typeof fileData === 'string' ? fileData : fileData.filename;
             
-            // Skip if no URL (legacy data might be missing actual blobs in mock mode if reload happened)
             if (!fileUrl) continue;
 
             try {
-                const blob = await fetchFileBlob(fileUrl);
+                const response = await fetch(fileUrl);
+                const blob = await response.blob();
                 const ext = getFileExtension(originalName) || 'pdf';
-                
-                // Find Category for renaming
                 const req = allDocsRequirements.find(d => d.name === docName);
                 const category = req ? req.category : 'Doc';
-                
-                // Clean Filename: "JohnDoe_Identity_Passport.pdf"
                 const cleanDocName = docName.replace(/[^a-zA-Z0-9]/g, '');
                 const newFilename = `${category.toUpperCase()}_${cleanDocName}.${ext}`;
 

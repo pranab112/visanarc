@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ArrowRight, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap, SearchCode, Crown, Info as InfoIcon } from 'lucide-react';
-import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType, AuditFinding } from '../../types';
+import { Plus, Search, User, FileText, Check, UploadCloud, Trash2, Loader2, AlertCircle, MapPin, Phone, Mail, FolderOpen, BookOpen, Receipt, Globe, X, Send, MessageCircle, Link, Lock, CheckCircle2, DollarSign, Wallet, Trophy, Activity, ArrowLeft, ArrowRight, ScanFace, CreditCard, Sparkles, Key, Calculator, Calendar, MessageSquare, Download, Clock, Ban, Package, Share2, Clipboard, GraduationCap, Building, Pencil, Save, History, Briefcase, GraduationCap as AcademicIcon, Landmark, Eye, FileCheck, ShieldAlert, ShieldCheck, ChevronRight, Pin, StickyNote, Info, TriangleAlert, UserCheck, Printer, Landmark as Bank, Network, BrainCircuit, RefreshCcw, TrendingUp, AlertTriangle, Zap, SearchCode, Crown, Info as InfoIcon, Filter } from 'lucide-react';
+import { Student, Country, ApplicationStatus, NocStatus, Invoice, AgencySettings, UserRole, DocumentStatus, ChangeRecord, Partner, StoredFile, NoteEntry, NoteType, AuditFinding, User as UserType } from '../../types';
 import { fetchStudents, saveStudents, fetchInvoices, saveInvoices, fetchSettings, fetchPartners, getPlanLimit } from '../../services/storageService';
 import { getCurrentUser } from '../../services/authService';
 import { uploadFile, deleteFile } from '../../services/fileStorageService';
@@ -17,7 +16,7 @@ import { analyzeVisaRisk, extractPassportData, auditStudentCompliance } from '..
 /**
  * Optimized Student Card Component
  */
-const StudentCard = React.memo(({ student, onClick }: { student: Student, onClick: (id: string) => void }) => (
+const StudentCard = React.memo(({ student, onClick, showBranch }: { student: Student, onClick: (id: string) => void, showBranch?: boolean }) => (
   <div 
     onClick={() => onClick(student.id)} 
     className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between h-[192px] group relative"
@@ -27,9 +26,16 @@ const StudentCard = React.memo(({ student, onClick }: { student: Student, onClic
             <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold group-hover:scale-110 transition-transform">
               {student.name.charAt(0)}
             </div>
-            <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold uppercase mr-2">
-              {student.status}
-            </span>
+            <div className="flex flex-col items-end">
+                <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold uppercase mb-1">
+                {student.status}
+                </span>
+                {showBranch && (
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter flex items-center">
+                        <Network size={8} className="mr-1"/> {student.branchId === 'main' ? 'Head Office' : (student.branchId || 'Internal')}
+                    </span>
+                )}
+            </div>
           </div>
           <h3 className="font-bold text-lg truncate text-slate-800 pr-6">{student.name}</h3>
           <p className="text-xs text-slate-400">{student.phone || 'No phone recorded'}</p>
@@ -67,6 +73,7 @@ export const StudentManager: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [settings, setSettings] = useState<AgencySettings | null>(null);
   
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Viewer');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'documents' | 'notes' | 'profile' | 'financials' | 'risk'>('documents');
@@ -75,6 +82,7 @@ export const StudentManager: React.FC = () => {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [branchFilter, setBranchFilter] = useState<string>('All');
 
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -134,8 +142,14 @@ export const StudentManager: React.FC = () => {
     const init = async () => {
         setLoading(true);
         try {
-            const currentUser = getCurrentUser();
-            setUserRole(currentUser?.role || 'Viewer');
+            const user = getCurrentUser();
+            setCurrentUser(user);
+            setUserRole(user?.role || 'Viewer');
+            
+            // Auto-lock branch for Counsellors
+            if (user?.role === 'Counsellor' && user.branchId) {
+                setBranchFilter(user.branchId);
+            }
 
             const [s, i, set, p] = await Promise.all([
                 fetchStudents(),
@@ -148,7 +162,11 @@ export const StudentManager: React.FC = () => {
             setSettings(set);
             setPartners(p);
             if (set) {
-                setNewStudentData(prev => ({ ...prev, targetCountry: set.defaultCountry }));
+                setNewStudentData(prev => ({ 
+                    ...prev, 
+                    targetCountry: set.defaultCountry,
+                    branchId: user?.branchId || 'main'
+                }));
             }
         } catch (error) {
             console.error("Failed to load data", error);
@@ -365,6 +383,7 @@ export const StudentManager: React.FC = () => {
     } catch (err) {
         showToast("AI Audit Failed.", "error");
     } finally {
+        // Fixed: Use 'setIsAuditing' instead of 'setAuditing'
         setIsAuditing(false);
     }
   };
@@ -441,7 +460,7 @@ export const StudentManager: React.FC = () => {
         highestQualification: 'Undergraduate (+2)', gpa: '', testType: 'None', testScore: '',
         intakeMonth: 'September', intakeYear: '2025', annualTuition: 0,
         educationGap: 0, previousRefusals: false, borderDetails: '', source: 'Walk-in',
-        branchId: 'main',
+        branchId: currentUser?.branchId || 'main',
         ocrConfidence: undefined
     });
     setSelectedStudentId(newStudent.id);
@@ -476,7 +495,7 @@ export const StudentManager: React.FC = () => {
           showToast("OCR Error: Could not read passport image.", "error");
       } finally {
           setScanningPassport(false);
-          e.value = '';
+          if (e.target) e.target.value = '';
       }
   };
 
@@ -638,8 +657,9 @@ export const StudentManager: React.FC = () => {
   const filteredStudents = useMemo(() => students.filter(s => {
       const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.phone.includes(searchTerm);
       const matchStatus = statusFilter === 'All' || s.status === statusFilter;
-      return matchSearch && matchStatus;
-  }), [students, searchTerm, statusFilter]);
+      const matchBranch = branchFilter === 'All' || (s.branchId || 'main') === branchFilter;
+      return matchSearch && matchStatus && matchBranch;
+  }), [students, searchTerm, statusFilter, branchFilter]);
 
   // Virtualization constants
   const CARD_HEIGHT = 192;
@@ -742,6 +762,25 @@ export const StudentManager: React.FC = () => {
                />
              </div>
              <div className="flex gap-2">
+                {/* BRANCH SWITCHER FOR ADMIN */}
+                {userRole === 'Owner' && (
+                    <div className="relative flex items-center bg-indigo-50 px-3 rounded-xl border border-indigo-100">
+                        <Network size={16} className="text-indigo-600 mr-2 shrink-0"/>
+                        <select 
+                            className="bg-transparent py-2.5 text-xs font-black uppercase tracking-widest text-indigo-700 outline-none pr-6 appearance-none"
+                            value={branchFilter}
+                            onChange={(e) => setBranchFilter(e.target.value)}
+                        >
+                            <option value="All">All Branches</option>
+                            <option value="main">Head Office</option>
+                            {(settings?.branches || []).filter(b => b.id !== 'main').map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                        <ChevronRight className="absolute right-2 text-indigo-400 rotate-90" size={12}/>
+                    </div>
+                )}
+                
                 <select 
                   className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none"
                   value={statusFilter}
@@ -783,6 +822,7 @@ export const StudentManager: React.FC = () => {
                       key={student.id} 
                       student={student} 
                       onClick={setSelectedStudentId} 
+                      showBranch={branchFilter === 'All' && userRole === 'Owner'}
                     />
                   ));
                 })}
@@ -798,7 +838,15 @@ export const StudentManager: React.FC = () => {
              <div className="bg-white border-b p-6 flex justify-between items-center sticky top-0 z-30 shadow-sm">
                  <div className="flex items-center">
                     <button onClick={() => setSelectedStudentId(null)} className="mr-4 p-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft size={24}/></button>
-                    <div><h2 className="text-xl font-bold text-slate-900">{selectedStudent.name}</h2><p className="text-xs text-slate-500">{selectedStudent.email || 'No email'}</p></div>
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">{selectedStudent.name}</h2>
+                        <div className="flex items-center text-xs text-slate-500">
+                            <span className="font-medium mr-2">{selectedStudent.email || 'No email'}</span>
+                            <span className="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black uppercase tracking-widest text-slate-400 border border-slate-200">
+                                <Network size={10} className="inline mr-1"/> Branch: {selectedStudent.branchId === 'main' ? 'Head Office' : (selectedStudent.branchId || 'main')}
+                            </span>
+                        </div>
+                    </div>
                  </div>
                  <div className="flex items-center space-x-3">
                     {activeTab === 'financials' && (
@@ -985,7 +1033,7 @@ export const StudentManager: React.FC = () => {
 
                                  {/* Government Clearances Integration */}
                                  <div className="pt-8 border-t border-slate-100">
-                                     <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4"><Landmark size={16} className="mr-2"/> Government Clearances</h4>
+                                     <h4 className="flex items-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]"><Landmark size={16} className="mr-2"/> Government Clearances</h4>
                                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                                          <div className="flex items-center justify-between">
                                              <div>
@@ -1656,12 +1704,14 @@ export const StudentManager: React.FC = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Branch / Location</label>
                                 <select 
-                                    className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold"
+                                    className="w-full p-4 border border-slate-200 rounded-2xl bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-bold disabled:opacity-50"
                                     value={newStudentData.branchId}
+                                    disabled={userRole !== 'Owner'}
                                     onChange={e => setNewStudentData({...newStudentData, branchId: e.target.value})}
                                 >
                                     {(settings?.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
+                                {userRole !== 'Owner' && <p className="text-[9px] text-slate-400 mt-1 font-bold">LOCKED TO YOUR ASSIGNED BRANCH</p>}
                             </div>
                         </section>
                       </div>
