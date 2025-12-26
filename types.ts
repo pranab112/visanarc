@@ -8,6 +8,8 @@ export enum Country {
   Korea = 'Korea'
 }
 
+export type PaymentStatus = 'pending' | 'reviewing' | 'paid';
+
 export enum ApplicationStatus {
   Lead = 'Lead',
   Applied = 'Applied',
@@ -65,7 +67,7 @@ export interface Branch {
 }
 
 export interface AcademicRecord {
-    level: string; // e.g., "10th", "12th", "Bachelors"
+    level: string;
     institution: string;
     board: string;
     passedYear: string;
@@ -121,63 +123,41 @@ export interface Student {
   noteEntries?: NoteEntry[];
   createdAt: number;
   blockedBy?: string[]; 
-  
-  // Branching
   branchId?: string;
-
-  // Intake Timeline
   intakeMonth?: string;
   intakeYear?: string;
-
-  // Client Portal Credentials
   portalPassword?: string; 
   messages?: ChatMessage[];
-
-  // Identity & Passport Data
   passportNumber?: string;
   dateOfBirth?: string; 
   nationality?: string;
   address?: string;
   gender?: 'Male' | 'Female' | 'Other';
   ocrConfidence?: number;
-
-  // Academic History
   highestQualification?: string;
   academics?: AcademicRecord[];
   educationHistory?: string;
   gpa?: string;
-
-  // English Proficiency
   testType?: 'IELTS' | 'PTE' | 'TOEFL' | 'None';
   testScoreBreakdown?: TestScoreBreakdown;
   testScore?: string;
   targetScore?: string;
-
-  // Financial & Risk
   sponsors?: SponsorRecord[];
   financialCap?: 'Low' | 'Medium' | 'Satisfactory' | 'High';
   annualTuition?: number; 
-
-  // Risk Assessment Data
   age?: number;
   educationGap?: number; 
   workExperience?: number; 
   previousRefusals?: boolean;
   borderDetails?: string;
-  
-  // AI Analysis Result
   riskAnalysis?: {
       date: number;
       result: string;
   };
-  
-  // New: Document Consistency Audit
   documentAudit?: {
       date: number;
       findings: AuditFinding[];
   };
-
-  // Test Prep Centre Info
   testPrep?: {
       enrolled: boolean;
       batch?: string;
@@ -196,16 +176,12 @@ export interface Student {
       mockTestHistory?: TestScoreBreakdown[]; 
       attendance?: Record<string, 'Present' | 'Absent' | 'Late'>;
   };
-  
   source?: string;
-  
-  // Partner Tracking
   referralPartnerId?: string; 
   assignedPartnerId?: string; 
   assignedPartnerName?: string; 
   commissionAmount?: number; 
   commissionStatus?: 'Pending' | 'Claimed' | 'Received'; 
-  
   courseInterest?: string; 
   courseInterests?: string[];
 }
@@ -300,6 +276,7 @@ export interface AgencySettings {
   address: string;
   defaultCountry: Country;
   currency: string;
+  paymentStatus: PaymentStatus;
   notifications: {
     emailOnVisa: boolean;
     dailyReminders: boolean;
@@ -327,6 +304,7 @@ export interface User {
   agencyId: string; 
   avatarUrl?: string;
   branchId?: string; 
+  paymentStatus?: PaymentStatus;
 }
 
 export interface AuthSession {

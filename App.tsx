@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { StudentManager } from './components/crm/StudentManager';
@@ -11,7 +12,7 @@ import { ActivityLogs } from './components/activity/ActivityLogs';
 import { LoginPage } from './components/auth/LoginPage';
 import { PublicLeadForm } from './components/leads/PublicLeadForm';
 import { StudentPortal } from './components/portal/StudentPortal';
-import { LicensingGuard } from './components/security/LicensingGuard';
+import { ActivationGate } from './components/auth/ActivationGate';
 import { getCurrentUser, initAuthListener } from './services/authService';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
@@ -24,21 +25,18 @@ export default function App() {
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       
-      // 1. Check for public form mode
       if (params.get('mode') === 'public-form') {
           setActiveTab('public-form');
           setLoading(false);
           return;
       }
 
-      // 2. Check for onboarding test mode (forces login page to register tab)
       if (params.get('mode') === 'onboarding') {
           setUser(null);
           setLoading(false);
           return;
       }
 
-      // Initialize Auth Listener
       const unsubscribe = initAuthListener((fetchedUser) => {
           setUser(fetchedUser);
           setLoading(false);
@@ -81,22 +79,24 @@ export default function App() {
       return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>;
   }
 
+  // Auth Guard
+  if (activeTab === 'public-form') return renderContent();
+  if (!user) return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  
+  // Student Portal Guard
+  if (user.role === 'Student') return <StudentPortal studentId={user.id} />;
+
+  // Manual Payment Verification Gate
+  if (user.paymentStatus !== 'paid') {
+      return <ActivationGate status={user.paymentStatus as any || 'pending'} agencyName={user.name} />;
+  }
+
   return (
-    <LicensingGuard>
-      {activeTab === 'public-form' ? (
-        renderContent()
-      ) : !user ? (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
-      ) : user.role === 'Student' ? (
-        <StudentPortal studentId={user.id} />
-      ) : (
-        <div className="min-h-screen bg-slate-50 flex">
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-          <main className="ml-64 flex-1 p-0 h-screen overflow-hidden">
-            {renderContent()}
-          </main>
-        </div>
-      )}
-    </LicensingGuard>
+    <div className="min-h-screen bg-slate-50 flex">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main className="ml-64 flex-1 p-0 h-screen overflow-hidden">
+        {renderContent()}
+      </main>
+    </div>
   );
 }

@@ -3,10 +3,47 @@ import { Student, Partner, Invoice, Task, AgencySettings, CommissionClaim, Expen
 import { getCurrentUser } from './authService';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { MOCK_STUDENTS_INITIAL, MOCK_PARTNERS_INITIAL, MOCK_EXPENSES_INITIAL } from '../constants';
+import { uploadFile } from './fileStorageService';
 
 const getAgencyId = () => {
     const user = getCurrentUser();
     return user ? user.agencyId : 'local-dev-agency';
+};
+
+export const submitPaymentReceipt = async (file: File): Promise<void> => {
+    const user = getCurrentUser();
+    if (!user) throw new Error("Not logged in");
+
+    try {
+        // 1. Upload the receipt file
+        const storedFile = await uploadFile(file, 'system/receipts', user.name);
+
+        if (isSupabaseConfigured) {
+            // 2. Update Agency Status
+            await supabase
+                .from('agencies')
+                .update({ payment_status: 'reviewing' })
+                .eq('id', user.agencyId);
+
+            // 3. Send Notification to Admin (You)
+            await supabase
+                .from('notifications')
+                .insert([{
+                    type: 'PAYMENT_REVIEW',
+                    agency_id: user.agencyId,
+                    message: `New payment receipt submitted by ${user.name} for agency ID ${user.agencyId}.`,
+                    metadata: { receipt_url: storedFile.url, agency_name: user.name }
+                }]);
+        } else {
+            localStorage.setItem(`sag_payment_${user.agencyId}`, 'reviewing');
+        }
+        
+        // Update Local Session
+        const updatedUser = { ...user, paymentStatus: 'reviewing' };
+        localStorage.setItem('sag_current_user', JSON.stringify(updatedUser));
+    } catch (err: any) {
+        throw new Error("Failed to submit receipt: " + err.message);
+    }
 };
 
 export const testSupabaseConnection = async (): Promise<{ success: boolean; message: string }> => {
@@ -138,7 +175,7 @@ export const fetchSettings = async (): Promise<AgencySettings> => {
     if (local) return JSON.parse(local);
 
     const defaultSettings: AgencySettings = {
-        agencyName: 'Visa In Arc', email: 'dev@local.host', phone: '9800000000', address: 'Main Office', defaultCountry: Country.Australia, currency: 'NPR',
+        agencyName: 'Visa In Arc', email: 'dev@local.host', phone: '9800000000', address: 'Main Office', defaultCountry: Country.Australia, currency: 'NPR', paymentStatus: 'pending',
         notifications: { emailOnVisa: true, dailyReminders: true },
         subscription: { plan: 'Enterprise' },
         testPrepBatches: ['Morning (7-8 AM)', 'Day (12-1 PM)', 'Evening (5-6 PM)'],

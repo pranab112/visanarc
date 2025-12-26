@@ -27,8 +27,9 @@ export const generateSop = async (
     Word Count: Maximum 700 words.
     Tone: Professional, ambitious, and sincere.`;
 
+    // Fix: Using gemini-3-pro-preview for SOP generation as it is a complex academic reasoning and creative task
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
     });
     return response.text || "Failed to generate SOP.";
