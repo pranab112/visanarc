@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Building, ArrowRight, Loader2, Globe, Key, ShieldCheck, CheckCircle2, User, Copy, ClipboardCheck, Sparkles, MessageCircle, Info } from 'lucide-react';
 import { login, registerAgency } from '../../services/authService';
@@ -13,7 +14,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     const [password, setPassword] = useState('');
     const [agencyName, setAgencyName] = useState('');
     const [fullName, setFullName] = useState('');
-    const [activationKey, setActivationKey] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -42,7 +42,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     setError('Invalid credentials. Please try again.');
                 }
             } else {
-                const result = await registerAgency(fullName, email, agencyName, activationKey);
+                const result = await registerAgency(fullName, email, agencyName);
                 setRegSuccess(result);
             }
         } catch (err: any) {
@@ -102,7 +102,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                                         </button>
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <p className="text-xs font-mono text-slate-400">Password: <span className="text-slate-900 font-bold">password</span></p>
+                                        <p className="text-xs font-mono text-slate-400">Password: <span className="text-slate-900 font-bold">password123</span></p>
                                         <p className="text-[10px] text-slate-400 italic">Default</p>
                                     </div>
                                 </div>
@@ -156,7 +156,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <p className="text-slate-500 mt-2 font-medium">Enterprise CRM & Intelligence Platform</p>
             </div>
 
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-white w-full max-md rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-8 duration-700">
                 <div className="flex border-b border-slate-100 bg-slate-50/50">
                     <button 
                         onClick={() => setMode('login')}

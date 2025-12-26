@@ -12,8 +12,7 @@ import { ActivityLogs } from './components/activity/ActivityLogs';
 import { LoginPage } from './components/auth/LoginPage';
 import { PublicLeadForm } from './components/leads/PublicLeadForm';
 import { StudentPortal } from './components/portal/StudentPortal';
-import { ActivationGate } from './components/auth/ActivationGate';
-import { getCurrentUser, initAuthListener } from './services/authService';
+import { getCurrentUser } from './services/authService';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
 
@@ -31,18 +30,9 @@ export default function App() {
           return;
       }
 
-      if (params.get('mode') === 'onboarding') {
-          setUser(null);
-          setLoading(false);
-          return;
-      }
-
-      const unsubscribe = initAuthListener((fetchedUser) => {
-          setUser(fetchedUser);
-          setLoading(false);
-      });
-
-      return () => unsubscribe();
+      const currentUser = getCurrentUser();
+      setUser(currentUser);
+      setLoading(false);
   }, []);
 
   const handleLoginSuccess = () => {
@@ -86,15 +76,10 @@ export default function App() {
   // Student Portal Guard
   if (user.role === 'Student') return <StudentPortal studentId={user.id} />;
 
-  // Manual Payment Verification Gate
-  if (user.paymentStatus !== 'paid') {
-      return <ActivationGate status={user.paymentStatus as any || 'pending'} agencyName={user.name} />;
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="ml-64 flex-1 p-0 h-screen overflow-hidden">
+      <main className="ml-0 md:ml-64 flex-1 p-0 h-screen overflow-hidden">
         {renderContent()}
       </main>
     </div>

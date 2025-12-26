@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, Building, Mail, Phone, CheckCircle2, RotateCw, Crown, Check, Loader2, Plus, X, Settings2, Trash2, Download } from 'lucide-react';
 import { AgencySettings, SubscriptionPlan, Branch, User } from '../../types';
-import { fetchSettings, saveSettings, fetchAllData, importData, testSupabaseConnection } from '../../services/storageService';
+// Fix: Removed testSupabaseConnection as it is not exported from the storageService module
+import { fetchSettings, saveSettings, fetchAllData, importData } from '../../services/storageService';
 import { getCurrentUser, registerBranchUser } from '../../services/authService';
 import { LeadFormBuilder } from './LeadFormBuilder';
 

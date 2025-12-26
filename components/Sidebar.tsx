@@ -1,7 +1,6 @@
 
-import { isSupabaseConfigured } from '../services/supabaseClient';
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X, Magnet, Cloud, CloudOff, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, BrainCircuit, Users, BookOpen, PieChart, Activity, Loader2, LogOut, Menu, X, ShieldCheck, Settings as SettingsIcon } from 'lucide-react';
 import { fetchSettings } from '../services/storageService';
 import { getCurrentUser, logout } from '../services/authService';
 import { AgencySettings, User } from '../types';
@@ -15,7 +14,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const [settings, setSettings] = useState<AgencySettings | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(false); // Mobile menu state
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -32,7 +31,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     load();
   }, [activeTab]);
 
-  // Listen for mobile menu toggle events
   useEffect(() => {
       const handleToggle = () => setIsOpen(prev => !prev);
       window.addEventListener('toggle-sidebar', handleToggle);
@@ -61,7 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       );
   }
 
-  // Mobile Overlay
   const Overlay = () => (
       isOpen ? (
           <div 
@@ -84,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
             </h1>
             <div className="flex items-center mt-1">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
-                    plan === 'Pro' ? 'bg-indigo-50 text-white' : 
+                    plan === 'Pro' ? 'bg-indigo-500 text-white' : 
                     plan === 'Enterprise' ? 'bg-purple-500 text-white' : 
                     'bg-slate-700 text-slate-300'
                 }`}>
@@ -97,7 +94,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
       </div>
       
-      {/* User Profile Snippet */}
       <div className="px-6 py-4 bg-slate-800/50 flex items-center space-x-3 border-b border-slate-800">
          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">
             {user?.name.charAt(0) || 'U'}
@@ -123,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
                       return;
                   }
                   setActiveTab(item.id);
-                  setIsOpen(false); // Close on mobile select
+                  setIsOpen(false);
               }}
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
                 activeTab === item.id
@@ -140,31 +136,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       </nav>
 
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-        {/* CONNECTION STATUS BADGE */}
-        <div className={`mb-4 px-4 py-2 rounded-xl border flex items-center space-x-3 transition-all ${
-            isSupabaseConfigured 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-        }`}>
-            {isSupabaseConfigured ? <Cloud size={16} className="animate-pulse" /> : <CloudOff size={16} />}
-            <div className="flex-1">
-                <p className="text-[10px] font-black uppercase tracking-widest leading-none">
-                    {isSupabaseConfigured ? 'Cloud Sync' : 'Local Mode'}
-                </p>
-                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">
-                    {isSupabaseConfigured ? 'Production Live' : 'Offline Storage'}
-                </p>
-            </div>
-            {isSupabaseConfigured && <ShieldCheck size={14} className="text-emerald-500" />}
-        </div>
-
         <button 
             onClick={() => { setActiveTab('settings'); setIsOpen(false); }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all mb-2 ${
                 activeTab === 'settings' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
         >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <SettingsIcon size={20} />
             <span className="font-medium text-sm">Settings</span>
         </button>
 
@@ -177,8 +155,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </button>
         
         <div className="mt-4 text-center border-t border-slate-800 pt-3">
-            <span className="text-[10px] text-slate-600 font-mono block">v3.0-H5-STABLE</span>
-            <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Property of SMM84.</span>
+            <span className="text-[10px] text-slate-600 font-mono block">v3.0-H4-STABLE</span>
+            <span className="text-[8px] text-slate-700 block mt-1">© 2025 GTSDevs. Enterprise Local Edition.</span>
         </div>
     </div>
     </div>
