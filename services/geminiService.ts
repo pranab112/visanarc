@@ -1,7 +1,24 @@
 // @google/genai coding guidelines followed: Using GoogleGenAI with named apiKey parameter, correct model selection for complex tasks, and property-based text extraction.
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization to prevent browser errors
+let ai: GoogleGenAI | null = null;
+
+const getAI = (): GoogleGenAI => {
+  if (!ai) {
+    try {
+      // In browser, process.env might not exist or API_KEY might be undefined
+      const apiKey = typeof process !== 'undefined' && process.env?.API_KEY
+        ? process.env.API_KEY
+        : 'placeholder-key';
+      ai = new GoogleGenAI({ apiKey });
+    } catch (error) {
+      // Fallback for any initialization errors
+      ai = new GoogleGenAI({ apiKey: 'placeholder-key' });
+    }
+  }
+  return ai;
+};
 
 export const generateSop = async (
   studentName: string,
@@ -28,7 +45,7 @@ export const generateSop = async (
     Tone: Professional, ambitious, and sincere.`;
 
     // Fix: Using gemini-3-pro-preview for SOP generation as it is a complex academic reasoning and creative task
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
     });
@@ -50,7 +67,7 @@ export const analyzeVisaRisk = async (
 
     Evaluate the profile strictly based on current immigration trends for ${country}.`;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
@@ -109,7 +126,7 @@ export const auditStudentCompliance = async (
 
     Identify consistency errors, critical missing files, and expiry warnings. Return a JSON list of findings.`;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
@@ -152,7 +169,7 @@ export const extractPassportData = async (
   confidenceScore: number;
 } | null> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [
@@ -217,7 +234,7 @@ export const recommendUniversities = async (
     const prompt = `Act as an expert education counsellor. Recommend 4 universities in ${profile.country} for a student named ${profile.name}. 
     GPA: ${profile.gpa}, English: ${profile.testType} ${profile.testScore}, Interest: ${profile.courseInterest}.`;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
@@ -253,7 +270,7 @@ export const recommendUniversities = async (
 
 export const getImmigrationNews = async (country: string): Promise<{ text: string, sources: any[] }> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `What are the latest immigration updates and visa policy changes for international students in ${country} for 2025? Provide a concise summary.`,
       config: {
@@ -276,7 +293,7 @@ export const getImmigrationNews = async (country: string): Promise<{ text: strin
 
 export const generateMarketingPoster = async (prompt: string): Promise<string | null> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
@@ -288,9 +305,11 @@ export const generateMarketingPoster = async (prompt: string): Promise<string | 
       }
     });
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+    if (response.candidates && response.candidates[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
     }
     return null;
@@ -304,7 +323,7 @@ export const generateMarketingPoster = async (prompt: string): Promise<string | 
 
 export const generatePromoVideo = async (prompt: string): Promise<string | null> => {
   try {
-    const freshAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const freshAi = getAI();
     let operation = await freshAi.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
       prompt: `Cinematic marketing video for study abroad agency: ${prompt}. 4k, smooth transitions, professional lighting.`,
@@ -323,7 +342,8 @@ export const generatePromoVideo = async (prompt: string): Promise<string | null>
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) return null;
 
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const apiKey = typeof process !== 'undefined' && process.env?.API_KEY ? process.env.API_KEY : 'placeholder-key';
+    const response = await fetch(`${downloadLink}&key=${apiKey}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   } catch (error) {
@@ -335,7 +355,7 @@ export const generatePromoVideo = async (prompt: string): Promise<string | null>
 // --- LIVE API INTERVIEW FEATURE ---
 
 export const connectLiveInterview = async (callbacks: any, country: string) => {
-  const freshAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const freshAi = getAI();
   return freshAi.live.connect({
     model: 'gemini-2.5-flash-native-audio-preview-09-2025',
     callbacks,

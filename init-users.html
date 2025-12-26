@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Initialize Demo Users</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4f46e5;
+            padding-bottom: 10px;
+        }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #4338ca;
+        }
+        .success {
+            background: #10b981;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        .credentials {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        .credential {
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Initialize Demo Users for Visa In Arc</h1>
+        <p>Click the button below to initialize demo users in localStorage for the application.</p>
+        <button onclick="initializeUsers()">Initialize Demo Users</button>
+
+        <div id="success" class="success">
+            ✅ Demo users initialized successfully!
+        </div>
+
+        <div id="credentials" class="credentials">
+            <h3>You can now login with:</h3>
+            <div class="credential">📧 admin@demo.com / 🔑 password (Owner/Admin)</div>
+            <div class="credential">📧 staff@demo.com / 🔑 password (Counsellor)</div>
+            <div class="credential">📧 student@demo.com / 🔑 password (Student)</div>
+            <br>
+            <a href="http://localhost:3000" style="color: #4f46e5; font-weight: bold;">
+                → Go to Application
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function initializeUsers() {
+            // Demo users with their passwords
+            const demoUsers = [
+                {
+                    id: 'mock-admin-id',
+                    name: 'System Administrator',
+                    email: 'admin@demo.com',
+                    role: 'Owner',
+                    agencyId: 'local-dev-agency',
+                    paymentStatus: 'paid',
+                    mockPassword: 'password'
+                },
+                {
+                    id: 'mock-staff-id',
+                    name: 'Lead Counsellor',
+                    email: 'staff@demo.com',
+                    role: 'Counsellor',
+                    agencyId: 'local-dev-agency',
+                    paymentStatus: 'paid',
+                    mockPassword: 'password'
+                },
+                {
+                    id: '1',
+                    name: 'Ram Karki',
+                    email: 'student@demo.com',
+                    role: 'Student',
+                    agencyId: 'local-dev-agency',
+                    paymentStatus: 'paid',
+                    mockPassword: 'password'
+                }
+            ];
+
+            // Save to localStorage
+            localStorage.setItem('sag_mock_user_registry', JSON.stringify(demoUsers));
+
+            // Set agency payment status
+            localStorage.setItem('sag_payment_local-dev-agency', 'paid');
+
+            // Initialize agency settings
+            const agencySettings = {
+                agencyName: 'Demo Agency',
+                email: 'admin@demo.com',
+                phone: '',
+                address: '',
+                defaultCountry: 'Australia',
+                currency: 'NPR',
+                paymentStatus: 'paid',
+                notifications: { emailOnVisa: true, dailyReminders: true },
+                subscription: { plan: 'Enterprise' },
+                branches: [{id: 'main', name: 'Head Office', location: 'Main'}]
+            };
+
+            localStorage.setItem('sag_settings_local-dev-agency', JSON.stringify(agencySettings));
+
+            // Show success message and credentials
+            document.getElementById('success').style.display = 'block';
+            document.getElementById('credentials').style.display = 'block';
+
+            console.log('Demo users initialized successfully!');
+        }
+    </script>
+</body>
+</html>

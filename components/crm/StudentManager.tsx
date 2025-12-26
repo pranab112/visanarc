@@ -1157,7 +1157,7 @@ export const StudentManager: React.FC = () => {
                                              <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Key Strengths</h5>
                                          </div>
                                          <ul className="space-y-4">
-                                             {parsedRiskReport?.strengths.map((s, i) => (
+                                             {parsedRiskReport?.strengths.map((s: string, i: number) => (
                                                  <li key={i} className="flex items-start text-sm text-slate-600 font-medium">
                                                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 mr-3 shrink-0" />
                                                      {s}
@@ -1173,7 +1173,7 @@ export const StudentManager: React.FC = () => {
                                              <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Risk Factors</h5>
                                          </div>
                                          <ul className="space-y-4">
-                                             {parsedRiskReport?.factors.map((f, i) => (
+                                             {parsedRiskReport?.factors.map((f: string, i: number) => (
                                                  <li key={i} className="flex items-start text-sm text-slate-600 font-medium">
                                                      <div className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5 mr-3 shrink-0" />
                                                      {f}
@@ -1189,7 +1189,7 @@ export const StudentManager: React.FC = () => {
                                              <h5 className="font-black text-slate-800 text-sm uppercase tracking-widest">Recommendations</h5>
                                          </div>
                                          <ul className="space-y-4">
-                                             {parsedRiskReport?.recommendations.map((r, i) => (
+                                             {parsedRiskReport?.recommendations.map((r: string, i: number) => (
                                                  <li key={i} className="flex items-start text-sm text-slate-800 font-bold bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
                                                      <ChevronRight size={16} className="mr-2 mt-0.5 text-indigo-500 shrink-0" />
                                                      {r}

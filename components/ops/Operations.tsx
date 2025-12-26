@@ -266,7 +266,7 @@ const KanbanBoard = ({ onTabChange, students, setStudents }: any) => {
                 <span className="bg-white px-2.5 py-0.5 rounded-lg text-[10px] font-black text-slate-400 border border-slate-200 shadow-sm">{colStudents.length}</span>
               </div>
               <div className="flex-1 p-3 space-y-3 overflow-y-auto custom-scrollbar">
-                {colStudents.map(student => (
+                {colStudents.map((student: any) => (
                   <div key={student.id} draggable onDragStart={(e) => { setDraggedStudentId(student.id); e.dataTransfer.setData('text/plain', student.id); }} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 group hover:border-indigo-400 hover:shadow-xl transition-all cursor-grab active:cursor-grabbing">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex flex-col">
