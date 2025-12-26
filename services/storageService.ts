@@ -1,7 +1,7 @@
 
 import { Student, Partner, Invoice, Task, AgencySettings, Expense, Country, SubscriptionPlan } from '../types';
 import { getCurrentUser } from './authService';
-import { MOCK_STUDENTS_INITIAL, MOCK_PARTNERS_INITIAL, MOCK_EXPENSES_INITIAL } from '../constants';
+// Mock data imports removed - agencies start with clean slate
 
 const getAgencyId = () => {
     const user = getCurrentUser();
@@ -30,18 +30,18 @@ const saveLocalData = (tableName: string, items: any[]) => {
     localStorage.setItem(key, JSON.stringify(items));
 };
 
-// Fix: Added explicit generic and any cast to MOCK_STUDENTS_INITIAL because string literals for ApplicationStatus/NocStatus in mock data cause type errors in strict TS environments
-export const fetchStudents = async (): Promise<Student[]> => getLocalData<Student>('students', MOCK_STUDENTS_INITIAL as any);
+// Start with empty array for new agencies - no mock students
+export const fetchStudents = async (): Promise<Student[]> => getLocalData<Student>('students', []);
 export const saveStudents = async (students: Student[]): Promise<void> => saveLocalData('students', students);
 
-// Fix: Added explicit generic and any cast to MOCK_PARTNERS_INITIAL because literal union types for Partner['type'] in mock data cause inference mismatch errors
-export const fetchPartners = async (): Promise<Partner[]> => getLocalData<Partner>('partners', MOCK_PARTNERS_INITIAL as any);
+// Start with empty array for new agencies - no mock partners
+export const fetchPartners = async (): Promise<Partner[]> => getLocalData<Partner>('partners', []);
 export const savePartners = async (partners: Partner[]): Promise<void> => saveLocalData('partners', partners);
 
 export const fetchInvoices = async (): Promise<Invoice[]> => getLocalData('invoices', []);
 export const saveInvoices = async (invoices: Invoice[]): Promise<void> => saveLocalData('invoices', invoices);
 
-export const fetchExpenses = async (): Promise<Expense[]> => getLocalData('expenses', MOCK_EXPENSES_INITIAL);
+export const fetchExpenses = async (): Promise<Expense[]> => getLocalData('expenses', []);
 export const saveExpenses = async (expenses: Expense[]): Promise<void> => saveLocalData('expenses', expenses);
 
 export const fetchTasks = async (): Promise<Task[]> => getLocalData('tasks', []);
