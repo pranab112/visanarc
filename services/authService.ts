@@ -27,9 +27,9 @@ export const login = async (email: string, password: string): Promise<User | nul
         }
     }
     
-    // Default admin fallback for fresh installs
-    if (email === 'admin@agency.com' && password === 'admin123') {
-        const admin: User = { id: 'admin_1', name: 'System Admin', email: 'admin@agency.com', role: 'Owner', agencyId: 'default_agency', paymentStatus: 'paid' };
+    // Demo admin fallback for testing only
+    if (email === 'demo@visainarc.com' && password === 'demo2024') {
+        const admin: User = { id: 'demo_admin', name: 'Demo Admin', email: 'demo@visainarc.com', role: 'Owner', agencyId: 'demo_agency', paymentStatus: 'paid' };
         saveToLocalUserRegistry(admin);
         currentUserCache = admin;
         localStorage.setItem('sag_current_user', JSON.stringify(admin));
@@ -43,18 +43,24 @@ export const registerAgency = async (name: string, email: string, agencyName: st
     const agencyId = `agency_${Date.now()}`;
     const sanitizedAgency = agencyName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const staffEmail = `staff@${sanitizedAgency}.com`;
-    const staffPass = 'staff123';
+    const staffPass = `${sanitizedAgency}2024`;
 
-    const ownerUser: User = { id: `owner_${Date.now()}`, name, email, role: 'Owner', agencyId, paymentStatus: 'paid' };
-    const staffUser: User = { id: `staff_${Date.now()}`, name: 'Default Staff', email: staffEmail, role: 'Counsellor', agencyId, paymentStatus: 'paid' };
-    
+    const ownerUser: User = { id: `owner_${Date.now()}`, name, email, role: 'Owner', agencyId, paymentStatus: 'pending' };
+    const staffUser: User = { id: `staff_${Date.now()}`, name: `${agencyName} Staff`, email: staffEmail, role: 'Counsellor', agencyId, paymentStatus: 'pending' };
+
     localStorage.setItem(`sag_settings_${agencyId}`, JSON.stringify({
-        agencyName, email, phone: '', address: '', defaultCountry: Country.Australia, currency: 'NPR', paymentStatus: 'paid',
-        notifications: { emailOnVisa: true, dailyReminders: true },
-        subscription: { plan: 'Enterprise' },
-        branches: [{id: 'main', name: 'Head Office', location: 'Main'}]
+        agencyName,
+        email,
+        phone: '',
+        address: '',
+        defaultCountry: Country.USA,
+        currency: 'USD',
+        paymentStatus: 'pending',
+        notifications: { emailOnVisa: false, dailyReminders: false },
+        subscription: { plan: 'Trial' },
+        branches: [{id: 'main', name: agencyName, location: 'Primary Location'}]
     }));
-    
+
     saveToLocalUserRegistry(ownerUser);
     saveToLocalUserRegistry(staffUser);
 
